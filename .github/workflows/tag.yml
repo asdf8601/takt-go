@@ -1,0 +1,44 @@
+name: Publish release
+
+on:
+  push:
+    branches:
+    - "main"
+
+jobs:
+    prepare-github-release:
+        name: "Prepare GitHub Release 🚀"
+        runs-on: ubuntu-latest
+        outputs:
+            version_tag: ${{ steps.calculate_tag_version.outputs.version_tag }}
+        steps:
+        - name: Checkout Repository
+          uses: actions/checkout@v4
+          with:
+            fetch-depth: 0
+
+        - name: Manage semantic versioning
+          uses: paulhatch/semantic-version@v5.4.0
+          id: calculate_tag_version
+          with:
+            tag_prefix: ""
+            major_pattern: "[MAJOR]"
+            minor_pattern: "[MINOR]"
+            version_format: "${major}.${minor}.${patch}"
+            bump_each_commit: false
+            search_commit_body: true
+            debug: true
+        - name: Bump version and push tag
+          id: tag_version
+          uses: mathieudutour/github-tag-action@v6.1
+          with:
+            github_token: ${{ secrets.GITHUB_TOKEN }}
+            custom_tag: ${{ steps.calculate_tag_version.outputs.version_tag }}
+            tag_prefix: ""
+
+        - name: Create a GitHub release
+          uses: ncipollo/release-action@v1.14.0
+          with:
+            tag: ${{ steps.calculate_tag_version.outputs.version_tag }}
+            name: Release ${{ steps.calculate_tag_version.outputs.version_tag }}
+            body: ${{ steps.tag_version.outputs.changelog }}
