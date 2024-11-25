@@ -21,12 +21,9 @@ jobs:
           cache: true
 
       - name: lint
-        run: |-
-          cd go
-          make lint
+        run: make lint
 
       - name: test
         run: |-
           export TAKT_FILE=data/test.csv
-          cd go
           make test
