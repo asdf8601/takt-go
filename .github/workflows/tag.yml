@@ -10,7 +10,7 @@ env:
 
 jobs:
     prepare-github-release:
-        name: "Prepare GitHub Release 🚀"
+        name: "Checkout"
         runs-on: ubuntu-latest
         outputs:
             version_tag: ${{ steps.calculate_tag_version.outputs.version_tag }}
@@ -20,7 +20,7 @@ jobs:
           with:
             fetch-depth: 0
 
-        - name: Manage semantic versioning
+        - name: SemVer
           uses: paulhatch/semantic-version@v5.4.0
           id: calculate_tag_version
           with:
@@ -32,7 +32,7 @@ jobs:
             search_commit_body: true
             debug: true
 
-        - name: Bump version and push tag
+        - name: Bump version
           id: tag_version
           uses: mathieudutour/github-tag-action@v6.1
           with:
@@ -40,7 +40,7 @@ jobs:
             custom_tag: ${{ steps.calculate_tag_version.outputs.version_tag }}
             tag_prefix: "${{ env.tag_prefix }}"
 
-        - name: Create a GitHub release
+        - name: Release
           uses: ncipollo/release-action@v1.14.0
           with:
             tag: ${{ steps.calculate_tag_version.outputs.version_tag }}
