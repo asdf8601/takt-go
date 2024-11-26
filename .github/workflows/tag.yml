@@ -27,18 +27,19 @@ jobs:
             tag_prefix: "${{ env.tag_prefix }}"
             major_pattern: "[MAJOR]"
             minor_pattern: "[MINOR]"
-            version_format: "${major}.${minor}.${patch}"
+            version_format: "v${major}.${minor}.${patch}"
             bump_each_commit: false
             search_commit_body: true
             debug: true
 
+          # https://github.com/mathieudutour/github-tag-action
         - name: Bump version
           id: tag_version
           uses: mathieudutour/github-tag-action@v6.1
           with:
             github_token: ${{ secrets.GITHUB_TOKEN }}
             custom_tag: ${{ steps.calculate_tag_version.outputs.version_tag }}
-            tag_prefix: "${{ env.tag_prefix }}"
+            tag_prefix: ""  # NOBUG
 
         - name: Release
           uses: ncipollo/release-action@v1.14.0
