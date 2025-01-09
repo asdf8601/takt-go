@@ -18,7 +18,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var Version = "2024.07.27"
+var Version = "2025-01-09"
 var FileName = getFileName("TAKT_FILE", "~/takt.csv")
 var Header = []string{"timestamp", "kind", "notes"}
 
