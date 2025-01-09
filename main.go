@@ -40,11 +40,18 @@ type AggregatedRecord struct {
 }
 
 // printGrid prints the grid of the records.
-func printGrid() {
-	records, err := readRecords(-1)
+func printGrid(year string, legend bool) {
+	records, err := readRecords(1)
 	if err != nil {
 		log.Fatal(err)
 	}
+	last_day := records[0].Timestamp.Format("2006-01-02")
+
+	records, err = readRecords(-1)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	agg, err := calculateDuration(records, "day")
 	if err != nil {
 		log.Fatalf("error calculating duration: %v", err)
@@ -54,17 +61,26 @@ func printGrid() {
 	for _, a := range agg {
 		days_agg[a.Group] = a
 	}
-	// Crear un slice para almacenar las 53 semanas.
-	grid := make([][9]string, 54)
 
-	// Ajuste de las fechas para comenzar un lunes.
-	startDate := "2024-01-01"
+	grid := make([][9]string, 54)
+	for i := range grid {
+		for j := range grid[i] {
+			grid[i][j] = "  "
+		}
+	}
+
+	startDate := year + "-01-01"
 	t, _ := time.Parse("2006-01-02", startDate)
 	value := ""
+	last_idx := -1
 
 	for i := 0; i < 365; i++ {
 		day := t.Format("2006-01-02")
 		year, week := t.ISOWeek()
+		if day > last_day {
+			last_idx = week
+			break
+		}
 		if t.Year() != year {
 			continue
 		}
@@ -90,21 +106,27 @@ func printGrid() {
 		t = t.Add(time.Hour * 24)
 	}
 
+	if last_idx > 0 {
+		grid = grid[:last_idx+1]
+	}
 	pad := "    "
-	// "     W  D  L  M  X  J  V  S "
-	// "               ------------------------            "
-	// "    2024-12-30 01 󰋣  󰋣  󰋣    󰈸  󰋣  󰋣 "
 	fmt.Printf("%s            W L  M  X  J  V  S  D \n", pad)
 	fmt.Printf("%s           -----------------------", pad)
-	for _, week := range grid {
+	for idx, week := range grid {
 		fmt.Printf("%s%s %s %s %s %s %s %s %s %s\n", pad, week[0], week[1], week[3], week[4], week[5], week[6], week[7], week[8], week[2])
+		if (last_idx > 0) && (idx == last_idx) {
+			break
+		}
 	}
-	fmt.Printf("%sLegend:\n", pad)
-	fmt.Printf("%s%s󰋣 0h00m - 1h00m\n", pad, pad)
-	fmt.Printf("%s%s 1h00m - 4h00m\n", pad, pad)
-	fmt.Printf("%s%s 4h00m - 8h00m\n", pad, pad)
-	fmt.Printf("%s%s󰈸 8h00m - 12h00m\n", pad, pad)
-	fmt.Printf("%s%s 12h00m or more\n", pad, pad)
+	if legend {
+		fmt.Printf("\n")
+		fmt.Printf("%sLegend:\n", pad)
+		fmt.Printf("%s%s󰋣 0h00m - 1h00m\n", pad, pad)
+		fmt.Printf("%s%s 1h00m - 4h00m\n", pad, pad)
+		fmt.Printf("%s%s 4h00m - 8h00m\n", pad, pad)
+		fmt.Printf("%s%s󰈸 8h00m - 12h00m\n", pad, pad)
+		fmt.Printf("%s%s 12h00m or more\n", pad, pad)
+	}
 }
 
 func findGitRoot() (string, error) {
@@ -670,10 +692,16 @@ var yearCmd = &cobra.Command{
 }
 
 var gridCmd = &cobra.Command{
-	Use:   "grid",
+	Use:   "grid [YEAR] [LEGEND true | false]",
 	Short: "Print the grid of the records",
 	Run: func(cmd *cobra.Command, args []string) {
-		printGrid()
+		len_args := len(args)
+		legend := false
+
+		if len_args > 1 {
+			legend = args[1] == "true"
+		}
+		printGrid(args[0], legend)
 	},
 }
 

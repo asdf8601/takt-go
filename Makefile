@@ -11,6 +11,9 @@ bin:
 .PHONY: build
 build: bin
 
+install: build
+	cp -f $(bin) ~/.local/$(bin)
+
 .PHONY: all
 all: build lint test clear
 	cp -f $(bin) ~/.local/$(bin)
