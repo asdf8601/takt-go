@@ -39,7 +39,74 @@ type AggregatedRecord struct {
 	AverageHours float64
 }
 
-// findGitRoot returns the root of the git repository.
+// printGrid prints the grid of the records.
+func printGrid() {
+	records, err := readRecords(-1)
+	if err != nil {
+		log.Fatal(err)
+	}
+	agg, err := calculateDuration(records, "day")
+	if err != nil {
+		log.Fatalf("error calculating duration: %v", err)
+	}
+
+	days_agg := make(map[string]AggregatedRecord)
+	for _, a := range agg {
+		days_agg[a.Group] = a
+	}
+	// Crear un slice para almacenar las 53 semanas.
+	grid := make([][9]string, 54)
+
+	// Ajuste de las fechas para comenzar un lunes.
+	startDate := "2024-01-01"
+	t, _ := time.Parse("2006-01-02", startDate)
+	value := ""
+
+	for i := 0; i < 365; i++ {
+		day := t.Format("2006-01-02")
+		year, week := t.ISOWeek()
+		if t.Year() != year {
+			continue
+		}
+		dayofweek := t.Weekday()
+
+		item := days_agg[day]
+		hours := item.TotalHours
+		if hours < 1 {
+			value = "󰋣 "
+		} else if hours < 4 {
+			value = " "
+		} else if hours < 8 {
+			value = " "
+		} else if hours < 12 {
+			value = "󰈸 "
+		} else {
+			value = " "
+		}
+
+		grid[week][0] = day
+		grid[week][1] = fmt.Sprintf("%02d", week)
+		grid[week][dayofweek+2] = value
+		t = t.Add(time.Hour * 24)
+	}
+
+	pad := "    "
+	// "     W  D  L  M  X  J  V  S "
+	// "               ------------------------            "
+	// "    2024-12-30 01 󰋣  󰋣  󰋣    󰈸  󰋣  󰋣 "
+	fmt.Printf("%s            W L  M  X  J  V  S  D \n", pad)
+	fmt.Printf("%s           -----------------------", pad)
+	for _, week := range grid {
+		fmt.Printf("%s%s %s %s %s %s %s %s %s %s\n", pad, week[0], week[1], week[3], week[4], week[5], week[6], week[7], week[8], week[2])
+	}
+	fmt.Printf("%sLegend:\n", pad)
+	fmt.Printf("%s%s󰋣 0h00m - 1h00m\n", pad, pad)
+	fmt.Printf("%s%s 1h00m - 4h00m\n", pad, pad)
+	fmt.Printf("%s%s 4h00m - 8h00m\n", pad, pad)
+	fmt.Printf("%s%s󰈸 8h00m - 12h00m\n", pad, pad)
+	fmt.Printf("%s%s 12h00m or more\n", pad, pad)
+}
+
 func findGitRoot() (string, error) {
 	dir := filepath.Dir(FileName)
 	dir, err := filepath.Abs(dir)
@@ -602,6 +669,14 @@ var yearCmd = &cobra.Command{
 	},
 }
 
+var gridCmd = &cobra.Command{
+	Use:   "grid",
+	Short: "Print the grid of the records",
+	Run: func(cmd *cobra.Command, args []string) {
+		printGrid()
+	},
+}
+
 var editCmd = &cobra.Command{
 	Use:     "edit",
 	Aliases: []string{"e"},
@@ -665,6 +740,7 @@ func init() {
 	rootCmd.AddCommand(editCmd)
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(commitCmd)
+	rootCmd.AddCommand(gridCmd)
 }
 
 func Execute() {

@@ -2,13 +2,14 @@ NAME=takt
 head=5
 bin=./bin/takt
 
-
-$(bin):
+.PHONY: bin
+bin:
+	rm -rf $(bin)
 	mkdir -p ./bin
 	go build -o ./bin/$(NAME) main.go
 
 .PHONY: build
-build: $(bin)
+build: bin
 
 .PHONY: all
 all: build lint test clear
