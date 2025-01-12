@@ -8,6 +8,9 @@ on:
 env:
   tag_prefix: "v"
 
+permissions:
+  contents: write
+
 jobs:
     prepare-github-release:
         name: "Checkout"
