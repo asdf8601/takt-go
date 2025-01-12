@@ -692,8 +692,8 @@ var yearCmd = &cobra.Command{
 }
 
 var gridCmd = &cobra.Command{
-	Use:   "grid [YEAR] [LEGEND true | false]",
 	Short: "Print the grid of the records",
+	Use:   "grid [YEAR] [LEGEND true | false]",
 	Run: func(cmd *cobra.Command, args []string) {
 		len_args := len(args)
 		legend := false

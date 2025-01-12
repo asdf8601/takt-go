@@ -32,14 +32,14 @@ jobs:
             search_commit_body: true
             debug: true
 
-          # https://github.com/mathieudutour/github-tag-action
         - name: Bump version
+          # https://github.com/mathieudutour/github-tag-action
           id: tag_version
           uses: mathieudutour/github-tag-action@v6.1
           with:
             github_token: ${{ secrets.GITHUB_TOKEN }}
             custom_tag: ${{ steps.calculate_tag_version.outputs.version_tag }}
-            tag_prefix: ""  # NOBUG
+            tag_prefix: ""  # NOBUG: intentionally set empty
 
         - name: Release
           uses: ncipollo/release-action@v1.14.0
