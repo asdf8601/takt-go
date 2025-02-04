@@ -18,7 +18,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var Version = "2025-01-09"
+const Version = "2025-01-09"
+
+var Editor = os.Getenv("TAKT_EDITOR")
 var FileName = getFileName("TAKT_FILE", "~/takt.csv")
 var Header = []string{"timestamp", "kind", "notes"}
 
@@ -110,8 +112,8 @@ func printGrid(year string, legend bool) {
 		grid = grid[:last_idx+1]
 	}
 	pad := "    "
-	fmt.Printf("%s            W L  M  X  J  V  S  D \n", pad)
-	fmt.Printf("%s           -----------------------", pad)
+	fmt.Printf("%s D  W  L  M  X  J  V  S  D\n", pad)
+	fmt.Printf("%s--------------------------", pad)
 	for idx, week := range grid {
 		fmt.Printf("%s%s %s %s %s %s %s %s %s %s\n", pad, week[0], week[1], week[3], week[4], week[5], week[6], week[7], week[8], week[2])
 		if (last_idx > 0) && (idx == last_idx) {
@@ -697,11 +699,18 @@ var gridCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		len_args := len(args)
 		legend := false
+		year := ""
+
+		if len_args < 1 {
+			year = time.Now().Format("2006")
+		}
 
 		if len_args > 1 {
+			year = args[0]
 			legend = args[1] == "true"
 		}
-		printGrid(args[0], legend)
+
+		printGrid(year, legend)
 	},
 }
 
@@ -710,8 +719,7 @@ var editCmd = &cobra.Command{
 	Aliases: []string{"e"},
 	Short:   "Edit the records file",
 	Run: func(cmd *cobra.Command, args []string) {
-		editor := os.Getenv("EDITOR")
-		edit_cmd := exec.Command(editor, FileName)
+		edit_cmd := exec.Command(Editor, FileName)
 		edit_cmd.Stdin = os.Stdin
 		edit_cmd.Stdout = os.Stdout
 		err := edit_cmd.Run()
