@@ -19,6 +19,7 @@ import (
 )
 
 const Version = "2025-01-09"
+const HEAD = 10
 
 var Editor = os.Getenv("TAKT_EDITOR")
 var FileName = getFileName("TAKT_FILE", "~/takt.csv")
@@ -301,7 +302,7 @@ func summary(offset string, head int) {
 
 	var outFmt string
 	if offset == "day" {
-		outFmt = "%-8s %6s\t%4s\t%6s\n"
+		outFmt = "%-12s %6s\t%4s\t%6s\n"
 	} else {
 		// wider total hours column for week, month, year
 		outFmt = "%-8s %10s\t%4s\t%6s\n"
@@ -605,7 +606,7 @@ var catCmd = &cobra.Command{
 	Short:   "Show all records",
 	Long:    "Show all records. If HEAD is provided, show the first n records.",
 	Run: func(cmd *cobra.Command, args []string) {
-		head := -1 // read all records
+		head := HEAD // read all records
 		var err error
 		if len(args) > 0 {
 			head, err = strconv.Atoi(args[0])
@@ -627,7 +628,7 @@ var dayCmd = &cobra.Command{
 	Short:   "Daily summary",
 	Long:    "Daily summary. If HEAD is provided, show the first n records.",
 	Run: func(cmd *cobra.Command, args []string) {
-		head := -1 // read all records
+		head := HEAD // read all records
 		var err error
 		if len(args) > 0 {
 			head, err = strconv.Atoi(args[0])
@@ -645,7 +646,7 @@ var weekCmd = &cobra.Command{
 	Short:   "Week to date summary",
 	Long:    "Week to date summary. If HEAD is provided, show the first n records.",
 	Run: func(cmd *cobra.Command, args []string) {
-		head := -1 // read all records
+		head := HEAD // read all records
 		var err error
 		if len(args) > 0 {
 			head, err = strconv.Atoi(args[0])
@@ -661,9 +662,9 @@ var monthCmd = &cobra.Command{
 	Aliases: []string{"m"},
 	Use:     "month [HEAD]",
 	Short:   "Month to date summary",
-	Long:    "Month to date summary. If HEAD is provided, show the first n records.",
+	Long:    "Month to date summary. If HEAD is provided, show the first n records. Use -1 to show all months.",
 	Run: func(cmd *cobra.Command, args []string) {
-		head := -1 // read all records
+		head := HEAD
 		var err error
 		if len(args) > 0 {
 			head, err = strconv.Atoi(args[0])
@@ -681,7 +682,7 @@ var yearCmd = &cobra.Command{
 	Short:   "Year to date summary",
 	Long:    "Year to date summary. If HEAD is provided, show the first n records.",
 	Run: func(cmd *cobra.Command, args []string) {
-		head := -1 // read all records
+		head := HEAD // read all records
 		var err error
 		if len(args) > 0 {
 			head, err = strconv.Atoi(args[0])
