@@ -111,6 +111,138 @@ func TestReadRecords(t *testing.T) {
 }
 
 // TODO: improve this
+func TestValidateRecord(t *testing.T) {
+    now := time.Now()
+    future := now.Add(24 * time.Hour)
+    
+    tests := []struct {
+        name    string
+        record  Record
+        wantErr bool
+    }{
+        {
+            name: "valid record",
+            record: Record{
+                Timestamp: now,
+                Kind:     "in",
+                Notes:    "test",
+            },
+            wantErr: false,
+        },
+        {
+            name: "zero timestamp",
+            record: Record{
+                Timestamp: time.Time{},
+                Kind:     "in",
+                Notes:    "test",
+            },
+            wantErr: true,
+        },
+        {
+            name: "invalid kind",
+            record: Record{
+                Timestamp: now,
+                Kind:     "invalid",
+                Notes:    "test",
+            },
+            wantErr: true,
+        },
+        {
+            name: "future timestamp",
+            record: Record{
+                Timestamp: future,
+                Kind:     "in",
+                Notes:    "test",
+            },
+            wantErr: true,
+        },
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            err := validateRecord(tt.record)
+            if (err != nil) != tt.wantErr {
+                t.Errorf("validateRecord() error = %v, wantErr %v", err, tt.wantErr)
+            }
+        })
+    }
+}
+
+func TestBackupAndRecover(t *testing.T) {
+    // Create a temporary test file
+    testContent := "timestamp,kind,notes\n2023-01-01T12:00:00Z,in,test note"
+    tmpFile, err := os.CreateTemp("", "takt-test-*.csv")
+    if err != nil {
+        t.Fatalf("Failed to create temp file: %v", err)
+    }
+    defer os.Remove(tmpFile.Name())
+    
+    if err := os.WriteFile(tmpFile.Name(), []byte(testContent), 0644); err != nil {
+        t.Fatalf("Failed to write test content: %v", err)
+    }
+
+    // Test backup creation
+    if err := backupFile(tmpFile.Name()); err != nil {
+        t.Errorf("backupFile() failed: %v", err)
+    }
+
+    // Verify backup file exists
+    backupName := tmpFile.Name() + ".bak"
+    if _, err := os.Stat(backupName); os.IsNotExist(err) {
+        t.Errorf("Backup file was not created")
+    }
+    defer os.Remove(backupName)
+
+    // Test recovery
+    records, err := recoverFromBackup(tmpFile.Name())
+    if err != nil {
+        t.Errorf("recoverFromBackup() failed: %v", err)
+    }
+    if len(records) != 1 {
+        t.Errorf("Expected 1 record from backup, got %d", len(records))
+    }
+}
+
+func TestWriteValidRecords(t *testing.T) {
+    // Create test records
+    now := time.Now()
+    records := []Record{
+        {now, "in", "test note 1"},
+        {now.Add(time.Hour), "out", "test note 2"},
+    }
+
+    // Create temporary file
+    tmpFile, err := os.CreateTemp("", "takt-test-*.csv")
+    if err != nil {
+        t.Fatalf("Failed to create temp file: %v", err)
+    }
+    defer os.Remove(tmpFile.Name())
+
+    // Test writing valid records
+    if err := writeValidRecords(tmpFile.Name(), records); err != nil {
+        t.Errorf("writeValidRecords() failed: %v", err)
+    }
+
+    // Verify file contents
+    content, err := os.ReadFile(tmpFile.Name())
+    if err != nil {
+        t.Fatalf("Failed to read written file: %v", err)
+    }
+
+    // Check if header is present
+    if !strings.Contains(string(content), "timestamp,kind,notes") {
+        t.Error("Header is missing in written file")
+    }
+
+    // Check if records are present
+    for _, record := range records {
+        timestamp := record.Timestamp.Format(TimeFormat)
+        if !strings.Contains(string(content), timestamp) {
+            t.Errorf("Record with timestamp %s is missing", timestamp)
+        }
+    }
+}
+
 func TestCheckAction(t *testing.T) {
 	// Create a temporary file to simulate the CSV records file
 	// You may need to specify a unique temp file for concurrent tests.
