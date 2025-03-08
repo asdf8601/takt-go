@@ -533,6 +533,80 @@ func checkAction(filename, notes string) {
 	fmt.Printf("Check %s at %s\n", kind, timestamp)
 }
 
+// validateRecord checks if a record is valid and returns an error if not
+func validateRecord(record Record) error {
+    if record.Timestamp.IsZero() {
+        return fmt.Errorf("invalid timestamp")
+    }
+    if record.Kind != "in" && record.Kind != "out" {
+        return fmt.Errorf("invalid kind: %s (must be 'in' or 'out')", record.Kind)
+    }
+    if record.Timestamp.After(time.Now()) {
+        return fmt.Errorf("timestamp in future: %v", record.Timestamp)
+    }
+    return nil
+}
+
+// backupFile creates a backup of the file
+func backupFile(fileName string) error {
+    backupName := fileName + ".bak"
+    source, err := os.Open(fileName)
+    if err != nil {
+        return err
+    }
+    defer source.Close()
+
+    destination, err := os.Create(backupName)
+    if err != nil {
+        return err
+    }
+    defer destination.Close()
+
+    _, err = io.Copy(destination, source)
+    return err
+}
+
+// recoverFromBackup attempts to recover records from the backup file
+func recoverFromBackup(fileName string) ([]Record, error) {
+    backupName := fileName + ".bak"
+    records, err := readRecordsFromFile(backupName, -1)
+    if err != nil {
+        return nil, fmt.Errorf("could not recover from backup: %w", err)
+    }
+    return records, nil
+}
+
+// writeValidRecords writes only valid records back to the file
+func writeValidRecords(fileName string, records []Record) error {
+    file, err := os.Create(fileName)
+    if err != nil {
+        return err
+    }
+    defer file.Close()
+
+    writer := csv.NewWriter(file)
+    defer writer.Flush()
+
+    // Write header
+    if err := writer.Write(Header); err != nil {
+        return err
+    }
+
+    // Write records
+    for _, record := range records {
+        line := []string{
+            record.Timestamp.Format(TimeFormat),
+            record.Kind,
+            record.Notes,
+        }
+        if err := writer.Write(line); err != nil {
+            return err
+        }
+    }
+
+    return nil
+}
+
 // writeRecords writes a new line to the file.
 func writeRecords(fileName, newLine string) error {
 	prevFile, err := os.Open(fileName)
