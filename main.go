@@ -467,46 +467,72 @@ func readRecordsFromFile(fileName string, head int) ([]Record, error) {
 	if _, err := os.Stat(fileName); os.IsNotExist(err) {
 		createFile()
 	}
+	
+	// Create backup before reading
+	if err := backupFile(fileName); err != nil {
+		return nil, fmt.Errorf("could not create backup: %w", err)
+	}
+
 	file, err := os.Open(fileName)
 	if err != nil {
 		return nil, fmt.Errorf("could not open file: %w", err)
 	}
 	defer file.Close()
+	
 	reader := csv.NewReader(file)
-
-	lines := [][]string{}
-	linesRead := -1
-
-	if head == -1 {
-		// read all
-		lines, err = reader.ReadAll()
-		if err != nil {
-			return nil, fmt.Errorf("could not read CSV: %w", err)
+	lines, err := reader.ReadAll()
+	if err != nil {
+		// Try to recover from backup
+		if records, err := recoverFromBackup(fileName); err == nil {
+			return records, nil
 		}
-	} else {
-		// read n first nrows
-		for i := 0; i < (head + 1); i++ {
-			line, err := reader.Read()
-			lines = append(lines, line)
-			if err != nil {
-				// NOTE: i can happen that the head is greater
-				// thant the number of lines in the file.
-				linesRead = i - 1 // avoid the header
-				break
-			}
-		}
+		return nil, fmt.Errorf("could not read CSV: %w", err)
 	}
 
 	var records []Record
-	if head == 0 || linesRead == 0 || len(lines) < 2 {
+	var validRecords []Record
+	var invalidLines []int
+
+	if head == 0 || len(lines) < 2 {
 		return records, nil
 	}
-	for _, line := range lines[1:] {
-		timestamp, _ := time.Parse(TimeFormat, line[0])
-		records = append(records, Record{timestamp, line[1], line[2]})
+
+	// Process all lines except header
+	for i, line := range lines[1:] {
+		if len(line) != 3 {
+			invalidLines = append(invalidLines, i+1)
+			continue
+		}
+
+		timestamp, err := time.Parse(TimeFormat, line[0])
+		if err != nil {
+			invalidLines = append(invalidLines, i+1)
+			continue
+		}
+
+		record := Record{timestamp, line[1], line[2]}
+		if err := validateRecord(record); err != nil {
+			invalidLines = append(invalidLines, i+1)
+			continue
+		}
+
+		validRecords = append(validRecords, record)
 	}
 
-	return records, nil
+	if len(invalidLines) > 0 {
+		// Log warning about invalid lines
+		log.Printf("Warning: found %d invalid records at lines: %v", len(invalidLines), invalidLines)
+		
+		// Write only valid records back to file
+		if err := writeValidRecords(fileName, validRecords); err != nil {
+			log.Printf("Error: could not clean up invalid records: %v", err)
+		}
+	}
+
+	if head > 0 && len(validRecords) > head {
+		return validRecords[:head], nil
+	}
+	return validRecords, nil
 }
 
 // checkAction checks in or out.
