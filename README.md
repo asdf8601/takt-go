@@ -23,7 +23,88 @@ Replace `yourusername` with the actual GitHub username or organization where thi
 
 ## Usage
 
-(Add basic usage instructions here)
+Basic commands to get started with takt:
+
+### Check In/Out
+
+```bash
+# Check in with a note
+takt check "Starting work on feature X"
+
+# Check out 
+takt check "Completed feature X"
+
+# Short form
+takt c "Meeting with team"
+```
+
+### View Records
+
+```bash
+# Show last 10 records (default)
+takt cat
+
+# Show last 5 records
+takt cat 5
+
+# Edit records manually
+takt edit   # or takt e
+```
+
+### Summary Reports
+
+```bash
+# Daily summary (last 10 days)
+takt day    # or takt d
+
+# Weekly summary
+takt week   # or takt w
+
+# Monthly summary
+takt month  # or takt m
+
+# Yearly summary
+takt year   # or takt y
+
+# Show more entries
+takt month 12  # show last 12 months
+```
+
+### Grid View
+
+```bash
+# Show current year's grid
+takt grid
+
+# Show specific year with legend
+takt grid 2023 true
+```
+
+### Git Integration
+
+```bash
+# Commit and push changes
+takt commit  # or takt cm
+```
+
+### Configuration
+
+Takt can be configured using environment variables:
+
+```bash
+# Set custom file location
+export TAKT_FILE=~/my-time.csv
+
+# Set preferred editor
+export TAKT_EDITOR=vim
+```
+
+The grid view uses these symbols:
+- 󰋣 : 0h00m - 1h00m
+-  : 1h00m - 4h00m
+-  : 4h00m - 8h00m
+- 󰈸 : 8h00m - 12h00m
+-  : 12h00m or more
 
 ## About the Name
 
