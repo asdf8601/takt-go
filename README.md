@@ -35,7 +35,7 @@ Basic commands to get started with takt:
 # Check in with a note
 takt check "Starting work on feature X"
 
-# Check out 
+# Check out
 takt check "Completed feature X"
 
 # Short form
@@ -91,7 +91,7 @@ The **Balance** column shows overtime/undertime using intelligent formatting:
   - `-1d` - 1 full working day undertime
 - **Hours format** (when balance < TARGET_HOUR):
   - `+1h00m` - 1 hour overtime
-  - `-0h30m` - 30 minutes undertime  
+  - `-0h30m` - 30 minutes undertime
   - `00h00m` - exactly on target
 
 ### Grid View
@@ -174,7 +174,7 @@ The balance is displayed using **days** as the primary unit, where 1 day = `TARG
 TAKT_TARGET_HOURS=8 takt d 1
 # 16 hours worked = 16 - 8 = 8h balance = +1d (1 × 8h day)
 
-# With 7.5-hour target  
+# With 7.5-hour target
 TAKT_TARGET_HOURS=7:30 takt d 1
 # 16 hours worked = 16 - 7.5 = 8.5h balance = +1d1h (1 × 7.5h day + 1h)
 
@@ -203,7 +203,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## TODO
 
 - [ ] Add demo
-- [ ] Implement plugin support  
+- [ ] Implement plugin support
 - [ ] Add more detailed usage instructions
 - [x] Create tests
 - [x] Add overtime/undertime tracking

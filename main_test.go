@@ -51,12 +51,12 @@ func TestCalculateDuration(t *testing.T) {
 }
 
 func TestAggregateBy(t *testing.T) {
-	// Create records in the order they appear in the slice (out first, then in)
-	// but chronologically in came before out
+	// Create records in reverse chronological order (newest first)
+	// This matches how the application typically stores records
 	now := time.Now()
 	records := []Record{
-		{now.Add(-4 * time.Hour), "in", ""},  // 4 hours ago
-		{now.Add(-2 * time.Hour), "out", ""}, // 2 hours ago (worked for 2 hours)
+		{now.Add(-2 * time.Hour), "out", ""}, // 2 hours ago - finished working (newest)
+		{now.Add(-4 * time.Hour), "in", ""},  // 4 hours ago - started working (worked for 2 hours)
 	}
 
 	groupFunc := func(t time.Time) string {
@@ -96,15 +96,27 @@ func TestReadRecords(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
-	defer os.Remove(tempFile.Name())
+	defer func() {
+		if err := os.Remove(tempFile.Name()); err != nil {
+			t.Logf("Error removing temp file: %v", err)
+		}
+	}()
 
 	// Write test data
 	writer := csv.NewWriter(tempFile)
-	writer.Write([]string{"timestamp", "kind", "notes"})
-	writer.Write([]string{"2023-01-01T10:00:00Z", "in", "test"})
-	writer.Write([]string{"2023-01-01T18:00:00Z", "out", "test"})
+	if err := writer.Write([]string{"timestamp", "kind", "notes"}); err != nil {
+		t.Fatalf("Failed to write header: %v", err)
+	}
+	if err := writer.Write([]string{"2023-01-01T10:00:00Z", "in", "test"}); err != nil {
+		t.Fatalf("Failed to write record: %v", err)
+	}
+	if err := writer.Write([]string{"2023-01-01T18:00:00Z", "out", "test"}); err != nil {
+		t.Fatalf("Failed to write record: %v", err)
+	}
 	writer.Flush()
-	tempFile.Close()
+	if err := tempFile.Close(); err != nil {
+		t.Fatalf("Failed to close temp file: %v", err)
+	}
 
 	// Test reading
 	records, err := readRecordsFromFile(tempFile.Name(), -1)
@@ -160,14 +172,20 @@ func TestBackupAndRecover(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
-	defer os.Remove(tempFile.Name())
+	defer func() {
+		if err := os.Remove(tempFile.Name()); err != nil {
+			t.Logf("Error removing temp file: %v", err)
+		}
+	}()
 
 	// Write test data
 	testData := "timestamp,kind,notes\n2023-01-01T10:00:00Z,in,test\n"
 	if _, err := tempFile.WriteString(testData); err != nil {
 		t.Fatalf("Failed to write test data: %v", err)
 	}
-	tempFile.Close()
+	if err := tempFile.Close(); err != nil {
+		t.Fatalf("Failed to close temp file: %v", err)
+	}
 
 	// Test backup creation
 	if err := backupFile(tempFile.Name()); err != nil {
@@ -179,7 +197,11 @@ func TestBackupAndRecover(t *testing.T) {
 	if _, err := os.Stat(backupName); os.IsNotExist(err) {
 		t.Errorf("Backup file was not created")
 	}
-	defer os.Remove(backupName)
+	defer func() {
+		if err := os.Remove(backupName); err != nil {
+			t.Logf("Error removing backup file: %v", err)
+		}
+	}()
 
 	// Test recovery
 	records, err := recoverFromBackup(tempFile.Name())
@@ -197,8 +219,14 @@ func TestWriteValidRecords(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
-	tmpFile.Close()
+	defer func() {
+		if err := os.Remove(tmpFile.Name()); err != nil {
+			t.Logf("Error removing temp file: %v", err)
+		}
+	}()
+	if err := tmpFile.Close(); err != nil {
+		t.Fatalf("Failed to close temp file: %v", err)
+	}
 
 	// Create test records
 	records := []Record{
@@ -237,20 +265,34 @@ func TestCheckAction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
-	defer os.Remove(tempFile.Name())
-	tempFile.Close()
+	defer func() {
+		if err := os.Remove(tempFile.Name()); err != nil {
+			t.Logf("Error removing temp file: %v", err)
+		}
+	}()
+	if err := tempFile.Close(); err != nil {
+		t.Fatalf("Failed to close temp file: %v", err)
+	}
 
 	// Initialize with header
 	file, err := os.Create(tempFile.Name())
 	if err != nil {
 		t.Fatalf("Failed to create file: %v", err)
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			t.Logf("Error closing file: %v", err)
+		}
+	}()
 
 	writer := csv.NewWriter(file)
-	writer.Write([]string{"timestamp", "kind", "notes"})
+	if err := writer.Write([]string{"timestamp", "kind", "notes"}); err != nil {
+		t.Fatalf("Failed to write header: %v", err)
+	}
 	writer.Flush()
-	file.Close()
+	if err := file.Close(); err != nil {
+		t.Logf("Error closing file: %v", err)
+	}
 
 	// Test check action
 	err = checkAction(tempFile.Name(), "test")
@@ -278,11 +320,19 @@ func TestGetTargetHours(t *testing.T) {
 			// Set environment variable
 			key := "TEST_TARGET_HOURS"
 			if tt.envValue != "" {
-				os.Setenv(key, tt.envValue)
+				if err := os.Setenv(key, tt.envValue); err != nil {
+					t.Fatalf("Failed to set environment variable: %v", err)
+				}
 			} else {
-				os.Unsetenv(key)
+				if err := os.Unsetenv(key); err != nil {
+					t.Fatalf("Failed to unset environment variable: %v", err)
+				}
 			}
-			defer os.Unsetenv(key)
+			defer func() {
+				if err := os.Unsetenv(key); err != nil {
+					t.Logf("Failed to unset environment variable: %v", err)
+				}
+			}()
 
 			result, err := getTargetHours(key, tt.dflt)
 			if err != nil {
@@ -375,13 +425,13 @@ func TestFormatOvertimeWithDifferentTargetHours(t *testing.T) {
 		{"7.5h_target_positive_16hr", 7.5, 16.0, "+2d1h"},
 		{"7.5h_target_positive_22.5hr", 7.5, 22.5, "+3d"},
 		{"7.5h_target_negative_7.5hr", 7.5, -7.5, "-1d"},
-		
+
 		// Tests with 6 hour target
 		{"6h_target_positive_6hr", 6.0, 6.0, "+1d"},
 		{"6h_target_positive_12hr", 6.0, 12.0, "+2d"},
 		{"6h_target_positive_13.5hr", 6.0, 13.5, "+2d1h30m"},
 		{"6h_target_negative_6hr", 6.0, -6.0, "-1d"},
-		
+
 		// Tests with 10 hour target
 		{"10h_target_positive_10hr", 10.0, 10.0, "+1d"},
 		{"10h_target_positive_20hr", 10.0, 20.0, "+2d"},
@@ -399,6 +449,81 @@ func TestFormatOvertimeWithDifferentTargetHours(t *testing.T) {
 		})
 	}
 }
+
+func TestBalanceCalculationAggregatedRecords(t *testing.T) {
+	// Initialize config for testing
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig() failed: %v", err)
+	}
+	originalConfig := config
+	config = cfg
+	defer func() { config = originalConfig }()
+
+	// Test balance calculation in aggregated records
+	now := time.Now()
+	records := []Record{
+		{now.Add(-18 * time.Hour), "out", ""}, // 1 day ago, 2pm (newest)
+		{now.Add(-24 * time.Hour), "in", ""},  // 1 day ago, 8am (6 hours)
+		{now.Add(-39 * time.Hour), "out", ""}, // 2 days ago, 5pm
+		{now.Add(-48 * time.Hour), "in", ""},  // 2 days ago, 8am (9 hours)
+	}
+
+	// Set target hours to 8 for testing
+	originalTargetHours := config.TargetHours
+	config.TargetHours = 8.0
+	defer func() { config.TargetHours = originalTargetHours }()
+
+	// Test daily aggregation
+	result, err := calculateDuration(records, "day")
+	if err != nil {
+		t.Fatalf("calculateDuration() failed: %v", err)
+	}
+
+	if len(result) != 2 {
+		t.Fatalf("Expected 2 daily records, got %d", len(result))
+	}
+
+	// Check first day (6 hours worked, 8 hours expected, -2 hour balance)
+	firstDay := result[0]
+	if firstDay.TotalHours != 6.0 {
+		t.Errorf("First day total hours = %v, want 6.0", firstDay.TotalHours)
+	}
+	expectedBalance1 := 6.0 - (8.0 * 1) // 6 hours - (8 target * 1 day)
+	if expectedBalance1 != -2.0 {
+		t.Errorf("First day expected balance = %v, want -2.0", expectedBalance1)
+	}
+
+	// Check second day (9 hours worked, 8 hours expected, +1 hours balance)
+	secondDay := result[1]
+	if secondDay.TotalHours != 9.0 {
+		t.Errorf("Second day total hours = %v, want 9.0", secondDay.TotalHours)
+	}
+	expectedBalance2 := 9.0 - (8.0 * 1) // 9 hours - (8 target * 1 day)
+	if expectedBalance2 != 1.0 {
+		t.Errorf("Second day expected balance = %v, want 1.0", expectedBalance2)
+	}
+
+	// Test weekly aggregation (both days should be in same week)
+	weeklyResult, err := calculateDuration(records, "week")
+	if err != nil {
+		t.Fatalf("calculateDuration() for week failed: %v", err)
+	}
+
+	if len(weeklyResult) != 1 {
+		t.Fatalf("Expected 1 weekly record, got %d", len(weeklyResult))
+	}
+
+	weeklyRecord := weeklyResult[0]
+	if weeklyRecord.TotalHours != 15.0 { // 6 + 9 = 15 hours
+		t.Errorf("Weekly total hours = %v, want 15.0", weeklyRecord.TotalHours)
+	}
+	expectedWeeklyBalance := 15.0 - (8.0 * 2) // 15 hours - (8 target * 2 days)
+	if expectedWeeklyBalance != -1.0 {
+		t.Errorf("Weekly expected balance = %v, want -1.0", expectedWeeklyBalance)
+	}
+}
+
 func TestBalanceCalculationWithDifferentTargetHours(t *testing.T) {
 	// Initialize config for testing
 	cfg, err := LoadConfig()
@@ -412,8 +537,8 @@ func TestBalanceCalculationWithDifferentTargetHours(t *testing.T) {
 	// Test with 7.5 hour target
 	now := time.Now()
 	records := []Record{
-		{now.Add(-24 * time.Hour), "in", ""},  // 1 day ago, start
-		{now.Add(-16 * time.Hour), "out", ""}, // 1 day ago, end (8 hours)
+		{now.Add(-16 * time.Hour), "out", ""}, // 1 day ago, end (newest)
+		{now.Add(-24 * time.Hour), "in", ""},  // 1 day ago, start (8 hours worked)
 	}
 
 	// Set target hours to 7.5 for testing
@@ -455,15 +580,15 @@ func TestBalanceCalculationMultipleDays(t *testing.T) {
 	// Test over multiple days with different work patterns
 	now := time.Now()
 	records := []Record{
-		// Day 1: 10 hours
-		{now.Add(-72 * time.Hour), "in", ""},  // 3 days ago
-		{now.Add(-62 * time.Hour), "out", ""}, // 3 days ago
-		// Day 2: 6 hours
-		{now.Add(-48 * time.Hour), "in", ""},  // 2 days ago
-		{now.Add(-42 * time.Hour), "out", ""}, // 2 days ago
-		// Day 3: 8 hours
-		{now.Add(-24 * time.Hour), "in", ""},  // 1 day ago
+		// Day 3: 8 hours (most recent)
 		{now.Add(-16 * time.Hour), "out", ""}, // 1 day ago
+		{now.Add(-24 * time.Hour), "in", ""},  // 1 day ago
+		// Day 2: 6 hours
+		{now.Add(-42 * time.Hour), "out", ""}, // 2 days ago
+		{now.Add(-48 * time.Hour), "in", ""},  // 2 days ago
+		// Day 1: 10 hours (oldest)
+		{now.Add(-62 * time.Hour), "out", ""}, // 3 days ago
+		{now.Add(-72 * time.Hour), "in", ""},  // 3 days ago
 	}
 
 	// Set target hours to 8 for testing
@@ -480,9 +605,9 @@ func TestBalanceCalculationMultipleDays(t *testing.T) {
 		t.Fatalf("Expected 3 daily records, got %d", len(result))
 	}
 
-	// Check individual day balances
-	expectedHours := []float64{10.0, 6.0, 8.0}
-	expectedBalances := []float64{2.0, -2.0, 0.0} // vs 8 hour target
+	// Check individual day balances (results are in reverse chronological order)
+	expectedHours := []float64{8.0, 6.0, 10.0}    // Day 3, Day 2, Day 1
+	expectedBalances := []float64{0.0, -2.0, 2.0} // vs 8 hour target
 
 	for i, record := range result {
 		if record.TotalHours != expectedHours[i] {
@@ -523,8 +648,14 @@ func TestCLIIntegrationWithBalance(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
-	defer os.Remove(testFile.Name())
-	testFile.Close()
+	defer func() {
+		if err := os.Remove(testFile.Name()); err != nil {
+			t.Logf("Error removing test file: %v", err)
+		}
+	}()
+	if err := testFile.Close(); err != nil {
+		t.Fatalf("Failed to close test file: %v", err)
+	}
 
 	// Initialize config
 	cfg, err := LoadConfig()

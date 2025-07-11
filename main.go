@@ -228,9 +228,7 @@ func printGridOutput(grid [][GridColumns]string, lastIdx int, legend bool) {
 
 		// Color code the symbols and collect stats
 		coloredWeek := make([]string, len(week))
-		for i := 0; i < len(week); i++ {
-			coloredWeek[i] = week[i]
-		}
+		copy(coloredWeek, week[:])
 
 		for i := 2; i < len(week); i++ {
 			symbol := week[i]
@@ -715,7 +713,11 @@ func createFile() error {
 	if err != nil {
 		return fmt.Errorf("failed to create file: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			fmt.Printf("Error closing file: %v\n", err)
+		}
+	}()
 
 	writer := csv.NewWriter(file)
 	defer writer.Flush()
@@ -750,7 +752,11 @@ func readRecordsFromFile(fileName string, head int) ([]Record, error) {
 	if err != nil {
 		return nil, fmt.Errorf("could not open file: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			fmt.Printf("Error closing file: %v\n", err)
+		}
+	}()
 
 	reader := csv.NewReader(file)
 	lines, err := reader.ReadAll()
@@ -853,13 +859,21 @@ func backupFile(fileName string) error {
 	if err != nil {
 		return err
 	}
-	defer source.Close()
+	defer func() {
+		if err := source.Close(); err != nil {
+			fmt.Printf("Error closing source file: %v\n", err)
+		}
+	}()
 
 	destination, err := os.Create(backupName)
 	if err != nil {
 		return err
 	}
-	defer destination.Close()
+	defer func() {
+		if err := destination.Close(); err != nil {
+			fmt.Printf("Error closing destination file: %v\n", err)
+		}
+	}()
 
 	_, err = io.Copy(destination, source)
 	return err
@@ -881,7 +895,11 @@ func writeValidRecords(fileName string, records []Record) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			fmt.Printf("Error closing file: %v\n", err)
+		}
+	}()
 
 	writer := csv.NewWriter(file)
 	defer writer.Flush()
@@ -912,18 +930,30 @@ func writeRecords(fileName, newLine string) error {
 	if err != nil {
 		return err
 	}
-	defer prevFile.Close()
+	defer func() {
+		if err := prevFile.Close(); err != nil {
+			fmt.Printf("Error closing previous file: %v\n", err)
+		}
+	}()
 
 	newFile, err := os.CreateTemp("", "takt_tempfile.csv")
 	if err != nil {
 		fmt.Printf("Error: could not create temp file")
 		return err
 	}
-	defer newFile.Close()
+	defer func() {
+		if err := newFile.Close(); err != nil {
+			fmt.Printf("Error closing new file: %v\n", err)
+		}
+	}()
 
 	newWriter := bufio.NewWriter(newFile)
-	defer newWriter.Flush()
-	_, err = newWriter.WriteString(fmt.Sprintf("%s,%s,%s\n", Header[0], Header[1], Header[2]))
+	defer func() {
+		if err := newWriter.Flush(); err != nil {
+			fmt.Printf("Error flushing writer: %v\n", err)
+		}
+	}()
+	_, err = fmt.Fprintf(newWriter, "%s,%s,%s\n", Header[0], Header[1], Header[2])
 	if err != nil {
 		fmt.Printf("Error: could not write to temp file")
 		return err
