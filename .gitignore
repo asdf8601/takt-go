@@ -1,3 +1,6 @@
 # venv
 bin
 .venv
+
+# Backup files created by takt
+*.bak

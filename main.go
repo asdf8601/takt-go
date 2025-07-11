@@ -11,22 +11,66 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 )
 
-const Version = "2025-01-09"
-const HEAD = 10
+const (
+	Version     = "2025-01-09"
+	DefaultHead = 10
 
-var Editor = os.Getenv("TAKT_EDITOR")
-var FileName = getFileName("TAKT_FILE", "~/takt.csv")
+	// Grid constants
+	DaysPerYear = 365
+	GridColumns = 9
+	GridRows    = 54
+
+	// Time format constants
+	TimeFormat = time.RFC3339
+	DateFormat = "2006-01-02"
+
+	// Hour thresholds for grid display
+	LowHours      = 1.0
+	MediumHours   = 4.0
+	HighHours     = 8.0
+	VeryHighHours = 12.0
+)
+
+// Config holds application configuration
+type Config struct {
+	Editor      string
+	FileName    string
+	TargetHours float64
+}
+
+// LoadConfig initializes configuration from environment variables
+func LoadConfig() (*Config, error) {
+	fileName, err := getFileName("TAKT_FILE", "~/takt.csv")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get file name: %w", err)
+	}
+
+	targetHours, err := getTargetHours("TAKT_TARGET_HOURS", 8.0)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get target hours: %w", err)
+	}
+
+	return &Config{
+		Editor:      os.Getenv("TAKT_EDITOR"),
+		FileName:    fileName,
+		TargetHours: targetHours,
+	}, nil
+}
+
+// Global configuration
+var config *Config
+
+// CSV Header
 var Header = []string{"timestamp", "kind", "notes"}
-
-const TimeFormat = time.RFC3339
-const DateFormat = "2006-01-02"
 
 type Record struct {
 	Timestamp time.Time
@@ -43,29 +87,34 @@ type AggregatedRecord struct {
 }
 
 // printGrid prints the grid of the records.
-func printGrid(year string, legend bool) {
+func printGrid(year string, legend bool) error {
 	records, err := readRecords(1)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("failed to read latest record: %w", err)
 	}
-	last_day := records[0].Timestamp.Format("2006-01-02")
+
+	if len(records) == 0 {
+		return errors.New("no records found")
+	}
+
+	lastDay := records[0].Timestamp.Format(DateFormat)
 
 	records, err = readRecords(-1)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("failed to read all records: %w", err)
 	}
 
 	agg, err := calculateDuration(records, "day")
 	if err != nil {
-		log.Fatalf("error calculating duration: %v", err)
+		return fmt.Errorf("error calculating duration: %w", err)
 	}
 
-	days_agg := make(map[string]AggregatedRecord)
+	daysAgg := make(map[string]AggregatedRecord)
 	for _, a := range agg {
-		days_agg[a.Group] = a
+		daysAgg[a.Group] = a
 	}
 
-	grid := make([][9]string, 54)
+	grid := make([][GridColumns]string, GridRows)
 	for i := range grid {
 		for j := range grid[i] {
 			grid[i][j] = "  "
@@ -73,51 +122,62 @@ func printGrid(year string, legend bool) {
 	}
 
 	startDate := year + "-01-01"
-	t, _ := time.Parse("2006-01-02", startDate)
-	value := ""
-	last_idx := -1
+	t, err := time.Parse(DateFormat, startDate)
+	if err != nil {
+		return fmt.Errorf("invalid year format: %w", err)
+	}
 
-	for i := 0; i < 365; i++ {
-		day := t.Format("2006-01-02")
-		year, week := t.ISOWeek()
-		if day > last_day {
-			last_idx = week
+	value := ""
+	lastIdx := -1
+
+	for i := 0; i < DaysPerYear; i++ {
+		day := t.Format(DateFormat)
+		currentYear, week := t.ISOWeek()
+		if day > lastDay {
+			lastIdx = week
 			break
 		}
-		if t.Year() != year {
+		if t.Year() != currentYear {
 			continue
 		}
-		dayofweek := t.Weekday()
+		dayOfWeek := t.Weekday()
 
-		item := days_agg[day]
+		item := daysAgg[day]
 		hours := item.TotalHours
-		if hours < 1 {
+		if hours < LowHours {
 			value = "󰋣 "
-		} else if hours < 4 {
-			value = " "
-		} else if hours < 8 {
-			value = " "
-		} else if hours < 12 {
+		} else if hours < MediumHours {
+			value = " "
+		} else if hours < HighHours {
+			value = " "
+		} else if hours < VeryHighHours {
 			value = "󰈸 "
 		} else {
-			value = " "
+			value = " "
 		}
 
 		grid[week][0] = day
 		grid[week][1] = fmt.Sprintf("%02d", week)
-		grid[week][dayofweek+2] = value
+		grid[week][dayOfWeek+2] = value
 		t = t.Add(time.Hour * 24)
 	}
 
-	if last_idx > 0 {
-		grid = grid[:last_idx+1]
+	if lastIdx > 0 {
+		grid = grid[:lastIdx+1]
 	}
+
+	printGridOutput(grid, lastIdx, legend)
+	return nil
+}
+
+// printGridOutput prints the formatted grid
+func printGridOutput(grid [][GridColumns]string, lastIdx int, legend bool) {
 	pad := "    "
 	fmt.Printf("%s D  W  L  M  X  J  V  S  D\n", pad)
-	fmt.Printf("%s--------------------------", pad)
+	fmt.Printf("%s--------------------------\n", pad)
 	for idx, week := range grid {
 		fmt.Printf("%s%s %s %s %s %s %s %s %s %s\n", pad, week[0], week[1], week[3], week[4], week[5], week[6], week[7], week[8], week[2])
-		if (last_idx > 0) && (idx == last_idx) {
+		if (lastIdx > 0) && (idx == lastIdx) {
 			break
 		}
 	}
@@ -125,19 +185,25 @@ func printGrid(year string, legend bool) {
 		fmt.Printf("\n")
 		fmt.Printf("%sLegend:\n", pad)
 		fmt.Printf("%s%s󰋣 0h00m - 1h00m\n", pad, pad)
-		fmt.Printf("%s%s 1h00m - 4h00m\n", pad, pad)
-		fmt.Printf("%s%s 4h00m - 8h00m\n", pad, pad)
+		fmt.Printf("%s%s 1h00m - 4h00m\n", pad, pad)
+		fmt.Printf("%s%s 4h00m - 8h00m\n", pad, pad)
 		fmt.Printf("%s%s󰈸 8h00m - 12h00m\n", pad, pad)
-		fmt.Printf("%s%s 12h00m or more\n", pad, pad)
+		fmt.Printf("%s%s 12h00m or more\n", pad, pad)
 	}
 }
 
+// findGitRoot finds the git root directory starting from the config file directory.
 func findGitRoot() (string, error) {
-	dir := filepath.Dir(FileName)
+	if config == nil {
+		return "", errors.New("config not initialized")
+	}
+
+	dir := filepath.Dir(config.FileName)
 	dir, err := filepath.Abs(dir)
 	if err != nil {
-		fmt.Println("Error: couldn't get Abs path")
+		return "", fmt.Errorf("couldn't get absolute path: %w", err)
 	}
+
 	for {
 		if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
 			return dir, nil
@@ -167,21 +233,29 @@ func gitCommit() error {
 
 // gitAdd adds the file to the git repository.
 func gitAdd() error {
-	gitRoot, _ := findGitRoot()
-	dir := filepath.Dir(FileName)
-	dir, err := filepath.Abs(dir)
-	if err != nil {
-		return errors.New("Error: couldn't get abs path")
+	if config == nil {
+		return errors.New("config not initialized")
 	}
-	fileDirRel, err := filepath.Rel(gitRoot, dir)
-	fileNameAbs := filepath.Join(fileDirRel, filepath.Base(FileName))
 
+	gitRoot, err := findGitRoot()
 	if err != nil {
-		return errors.New("Error: couldn't get relative path")
+		return err
 	}
+
+	dir := filepath.Dir(config.FileName)
+	dir, err = filepath.Abs(dir)
+	if err != nil {
+		return fmt.Errorf("couldn't get absolute path: %w", err)
+	}
+
+	fileDirRel, err := filepath.Rel(gitRoot, dir)
+	if err != nil {
+		return fmt.Errorf("couldn't get relative path: %w", err)
+	}
+
+	fileNameAbs := filepath.Join(fileDirRel, filepath.Base(config.FileName))
 	gitCmd := exec.Command("git", "-C", gitRoot, "add", fileNameAbs)
-	err = execBashCmd(gitCmd)
-	return err
+	return execBashCmd(gitCmd)
 }
 
 // execBashCmd executes a bash command.
@@ -226,24 +300,53 @@ func absPath(path string) (string, error) {
 	return path, nil
 }
 
+// getTargetHours returns the target hours from the environment variable or the default value.
+// Supports both float format (e.g., "7.5") and time format (e.g., "7:30").
+func getTargetHours(key string, dflt float64) (float64, error) {
+	value := os.Getenv(key)
+	if value == "" {
+		return dflt, nil
+	}
+
+	// Check if the value contains a colon (HH:MM format)
+	if strings.Contains(value, ":") {
+		parts := strings.Split(value, ":")
+		if len(parts) != 2 {
+			return dflt, nil
+		}
+
+		hours, err := strconv.Atoi(parts[0])
+		if err != nil || hours < 0 {
+			return dflt, nil
+		}
+
+		minutes, err := strconv.Atoi(parts[1])
+		if err != nil || minutes < 0 || minutes >= 60 {
+			return dflt, nil
+		}
+
+		// Convert to decimal hours
+		return float64(hours) + float64(minutes)/60.0, nil
+	}
+
+	// Try to parse as float
+	hours, err := strconv.ParseFloat(value, 64)
+	if err != nil {
+		return dflt, nil
+	}
+
+	return hours, nil
+}
+
 // getFileName returns the file name from the environment variable or the default value.
-func getFileName(key, dflt string) string {
+func getFileName(key, dflt string) (string, error) {
 	path := os.Getenv(key)
 
 	if path == "" {
-		out, err := absPath(dflt)
-		if err != nil {
-			return ""
-		}
-		return out
+		return absPath(dflt)
 	}
 
-	out, err := absPath(path)
-	if err != nil {
-		return ""
-	}
-	return out
-
+	return absPath(path)
 }
 
 // sortedKeys returns the keys of a map sorted in descending order.
@@ -270,18 +373,59 @@ func sortedKeys(m map[string]AggregatedRecord) []string {
 
 // hoursToText converts hours to a human-readable format.
 func hoursToText(totalHours float64) string {
-
 	if totalHours <= 0 {
 		return "00h00m"
 	} else if totalHours <= 24 {
 		hours := int(totalHours)
-		minutes := int(math.Round((float64(totalHours) - float64(hours)) * 60))
+		minutes := int(math.Round((totalHours - float64(hours)) * 60))
 		return fmt.Sprintf("%dh%02dm", hours, minutes)
 	} else {
 		days := int(totalHours / 24)
 		hours := int(totalHours) % 24
-		minutes := int(math.Round((float64(totalHours) - float64(days*24+hours)) * 60))
+		minutes := int(math.Round((totalHours - float64(days*24+hours)) * 60))
 		return fmt.Sprintf("%dd%02dh%02dm", days, hours, minutes)
+	}
+}
+
+// formatOvertime formats the overtime/undertime difference with a sign.
+func formatOvertime(difference float64) string {
+	if difference == 0 {
+		return "00h00m"
+	}
+
+	sign := ""
+	if difference > 0 {
+		sign = "+"
+	} else {
+		sign = "-"
+	}
+
+	// Use absolute value for formatting
+	absDiff := math.Abs(difference)
+
+	if absDiff <= 24 {
+		hours := int(absDiff)
+		minutes := int(math.Round((absDiff - float64(hours)) * 60))
+
+		// Handle case where minutes round to 60
+		if minutes >= 60 {
+			hours += minutes / 60
+			minutes = minutes % 60
+		}
+
+		return fmt.Sprintf("%s%dh%02dm", sign, hours, minutes)
+	} else {
+		days := int(absDiff / 24)
+		hours := int(absDiff) % 24
+		minutes := int(math.Round((absDiff - float64(days*24+hours)) * 60))
+
+		// Handle case where minutes round to 60
+		if minutes >= 60 {
+			hours += minutes / 60
+			minutes = minutes % 60
+		}
+
+		return fmt.Sprintf("%s%dd%02dh%02dm", sign, days, hours, minutes)
 	}
 }
 
@@ -302,19 +446,25 @@ func summary(offset string, head int) {
 
 	var outFmt string
 	if offset == "day" {
-		outFmt = "%-12s %6s\t%4s\t%6s\n"
+		outFmt = "%-12s %6s\t%4s\t%6s\t%8s\n"
+		fmt.Printf(outFmt, "Date", "Total", "Days", "Avg", "Balance")
 	} else {
 		// wider total hours column for week, month, year
-		outFmt = "%-8s %10s\t%4s\t%6s\n"
+		outFmt = "%-8s %10s\t%4s\t%6s\t%8s\n"
+		fmt.Printf(outFmt, "Date", "Total", "Days", "Avg", "Balance")
 	}
 
-	fmt.Printf(outFmt, "Date", "Total", "Days", "Avg")
 	for i := 0; i < head; i++ {
 		a := agg[i]
 		hhmm := hoursToText(a.TotalHours)
 		ndays := strconv.Itoa(len(a.Dates))
 		avg := hoursToText(a.AverageHours)
-		fmt.Printf(outFmt, a.Group, hhmm, ndays, avg)
+
+		// For all periods, calculate expected hours = target hours * working days
+		expectedHours := config.TargetHours * float64(len(a.Dates))
+		diff := a.TotalHours - expectedHours
+		overtime := formatOvertime(diff)
+		fmt.Printf(outFmt, a.Group, hhmm, ndays, avg, overtime)
 	}
 }
 
@@ -441,33 +591,42 @@ func printRecords(records []Record) {
 	}
 }
 
-// createFile creates a new file with the header.
-func createFile() {
-	file, err := os.Create(FileName)
+// createFile creates a new file with the header using the configured filename.
+func createFile() error {
+	if config == nil {
+		return errors.New("config not initialized")
+	}
+
+	file, err := os.Create(config.FileName)
 	if err != nil {
-		fmt.Println("Error:", err)
-		return
+		return fmt.Errorf("failed to create file: %w", err)
 	}
 	defer file.Close()
 
 	writer := csv.NewWriter(file)
 	defer writer.Flush()
 	if err := writer.Write(Header); err != nil {
-		fmt.Println("Error:", err)
+		return fmt.Errorf("failed to write header: %w", err)
 	}
+	return nil
 }
 
-// readRecords reads nrows records from the file
+// readRecords reads nrows records from the configured file
 func readRecords(head int) ([]Record, error) {
-	return readRecordsFromFile(FileName, head)
+	if config == nil {
+		return nil, errors.New("config not initialized")
+	}
+	return readRecordsFromFile(config.FileName, head)
 }
 
 // readRecordsFromFile reads nrows records from the file fileName and returns them.
 func readRecordsFromFile(fileName string, head int) ([]Record, error) {
 	if _, err := os.Stat(fileName); os.IsNotExist(err) {
-		createFile()
+		if err := createFile(); err != nil {
+			return nil, fmt.Errorf("failed to create file: %w", err)
+		}
 	}
-	
+
 	// Create backup before reading
 	if err := backupFile(fileName); err != nil {
 		return nil, fmt.Errorf("could not create backup: %w", err)
@@ -478,7 +637,7 @@ func readRecordsFromFile(fileName string, head int) ([]Record, error) {
 		return nil, fmt.Errorf("could not open file: %w", err)
 	}
 	defer file.Close()
-	
+
 	reader := csv.NewReader(file)
 	lines, err := reader.ReadAll()
 	if err != nil {
@@ -522,7 +681,7 @@ func readRecordsFromFile(fileName string, head int) ([]Record, error) {
 	if len(invalidLines) > 0 {
 		// Log warning about invalid lines
 		log.Printf("Warning: found %d invalid records at lines: %v", len(invalidLines), invalidLines)
-		
+
 		// Write only valid records back to file
 		if err := writeValidRecords(fileName, validRecords); err != nil {
 			log.Printf("Error: could not clean up invalid records: %v", err)
@@ -536,11 +695,10 @@ func readRecordsFromFile(fileName string, head int) ([]Record, error) {
 }
 
 // checkAction checks in or out.
-func checkAction(filename, notes string) {
+func checkAction(filename, notes string) error {
 	records, err := readRecordsFromFile(filename, 1)
 	if err != nil {
-		fmt.Println("Error:", err)
-		return
+		return fmt.Errorf("failed to read records: %w", err)
 	}
 
 	var kind string
@@ -553,84 +711,85 @@ func checkAction(filename, notes string) {
 	timestamp := time.Now().Format(TimeFormat)
 	line := fmt.Sprintf("%s,%s,%s", timestamp, kind, notes)
 	if err := writeRecords(filename, line); err != nil {
-		fmt.Println("Error:", err)
+		return fmt.Errorf("failed to write records: %w", err)
 	}
 
 	fmt.Printf("Check %s at %s\n", kind, timestamp)
+	return nil
 }
 
 // validateRecord checks if a record is valid and returns an error if not
 func validateRecord(record Record) error {
-    if record.Timestamp.IsZero() {
-        return fmt.Errorf("invalid timestamp")
-    }
-    if record.Kind != "in" && record.Kind != "out" {
-        return fmt.Errorf("invalid kind: %s (must be 'in' or 'out')", record.Kind)
-    }
-    if record.Timestamp.After(time.Now()) {
-        return fmt.Errorf("timestamp in future: %v", record.Timestamp)
-    }
-    return nil
+	if record.Timestamp.IsZero() {
+		return fmt.Errorf("invalid timestamp")
+	}
+	if record.Kind != "in" && record.Kind != "out" {
+		return fmt.Errorf("invalid kind: %s (must be 'in' or 'out')", record.Kind)
+	}
+	if record.Timestamp.After(time.Now()) {
+		return fmt.Errorf("timestamp in future: %v", record.Timestamp)
+	}
+	return nil
 }
 
 // backupFile creates a backup of the file
 func backupFile(fileName string) error {
-    backupName := fileName + ".bak"
-    source, err := os.Open(fileName)
-    if err != nil {
-        return err
-    }
-    defer source.Close()
+	backupName := fileName + ".bak"
+	source, err := os.Open(fileName)
+	if err != nil {
+		return err
+	}
+	defer source.Close()
 
-    destination, err := os.Create(backupName)
-    if err != nil {
-        return err
-    }
-    defer destination.Close()
+	destination, err := os.Create(backupName)
+	if err != nil {
+		return err
+	}
+	defer destination.Close()
 
-    _, err = io.Copy(destination, source)
-    return err
+	_, err = io.Copy(destination, source)
+	return err
 }
 
 // recoverFromBackup attempts to recover records from the backup file
 func recoverFromBackup(fileName string) ([]Record, error) {
-    backupName := fileName + ".bak"
-    records, err := readRecordsFromFile(backupName, -1)
-    if err != nil {
-        return nil, fmt.Errorf("could not recover from backup: %w", err)
-    }
-    return records, nil
+	backupName := fileName + ".bak"
+	records, err := readRecordsFromFile(backupName, -1)
+	if err != nil {
+		return nil, fmt.Errorf("could not recover from backup: %w", err)
+	}
+	return records, nil
 }
 
 // writeValidRecords writes only valid records back to the file
 func writeValidRecords(fileName string, records []Record) error {
-    file, err := os.Create(fileName)
-    if err != nil {
-        return err
-    }
-    defer file.Close()
+	file, err := os.Create(fileName)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
 
-    writer := csv.NewWriter(file)
-    defer writer.Flush()
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
 
-    // Write header
-    if err := writer.Write(Header); err != nil {
-        return err
-    }
+	// Write header
+	if err := writer.Write(Header); err != nil {
+		return err
+	}
 
-    // Write records
-    for _, record := range records {
-        line := []string{
-            record.Timestamp.Format(TimeFormat),
-            record.Kind,
-            record.Notes,
-        }
-        if err := writer.Write(line); err != nil {
-            return err
-        }
-    }
+	// Write records
+	for _, record := range records {
+		line := []string{
+			record.Timestamp.Format(TimeFormat),
+			record.Kind,
+			record.Notes,
+		}
+		if err := writer.Write(line); err != nil {
+			return err
+		}
+	}
 
-    return nil
+	return nil
 }
 
 // writeRecords writes a new line to the file.
@@ -692,11 +851,19 @@ var checkCmd = &cobra.Command{
 	Short:   "Check in or out",
 	Long:    "Check in or out. If NOTE is provided, it will be saved with the record.",
 	Run: func(cmd *cobra.Command, args []string) {
+		if config == nil {
+			fmt.Println("Error: config not initialized")
+			return
+		}
+
 		notes := ""
 		if len(args) > 0 {
 			notes = args[0]
 		}
-		checkAction(FileName, notes)
+
+		if err := checkAction(config.FileName, notes); err != nil {
+			fmt.Printf("Error: %v\n", err)
+		}
 	},
 }
 
@@ -706,7 +873,7 @@ var catCmd = &cobra.Command{
 	Short:   "Show all records",
 	Long:    "Show all records. If HEAD is provided, show the first n records.",
 	Run: func(cmd *cobra.Command, args []string) {
-		head := HEAD // read all records
+		head := DefaultHead
 		var err error
 		if len(args) > 0 {
 			head, err = strconv.Atoi(args[0])
@@ -728,7 +895,7 @@ var dayCmd = &cobra.Command{
 	Short:   "Daily summary",
 	Long:    "Daily summary. If HEAD is provided, show the first n records.",
 	Run: func(cmd *cobra.Command, args []string) {
-		head := HEAD // read all records
+		head := DefaultHead
 		var err error
 		if len(args) > 0 {
 			head, err = strconv.Atoi(args[0])
@@ -746,7 +913,7 @@ var weekCmd = &cobra.Command{
 	Short:   "Week to date summary",
 	Long:    "Week to date summary. If HEAD is provided, show the first n records.",
 	Run: func(cmd *cobra.Command, args []string) {
-		head := HEAD // read all records
+		head := DefaultHead
 		var err error
 		if len(args) > 0 {
 			head, err = strconv.Atoi(args[0])
@@ -764,7 +931,7 @@ var monthCmd = &cobra.Command{
 	Short:   "Month to date summary",
 	Long:    "Month to date summary. If HEAD is provided, show the first n records. Use -1 to show all months.",
 	Run: func(cmd *cobra.Command, args []string) {
-		head := HEAD
+		head := DefaultHead
 		var err error
 		if len(args) > 0 {
 			head, err = strconv.Atoi(args[0])
@@ -782,7 +949,7 @@ var yearCmd = &cobra.Command{
 	Short:   "Year to date summary",
 	Long:    "Year to date summary. If HEAD is provided, show the first n records.",
 	Run: func(cmd *cobra.Command, args []string) {
-		head := HEAD // read all records
+		head := DefaultHead
 		var err error
 		if len(args) > 0 {
 			head, err = strconv.Atoi(args[0])
@@ -798,20 +965,23 @@ var gridCmd = &cobra.Command{
 	Short: "Print the grid of the records",
 	Use:   "grid [YEAR] [LEGEND true | false]",
 	Run: func(cmd *cobra.Command, args []string) {
-		len_args := len(args)
+		lenArgs := len(args)
 		legend := false
 		year := ""
 
-		if len_args < 1 {
+		if lenArgs < 1 {
 			year = time.Now().Format("2006")
+		} else {
+			year = args[0]
 		}
 
-		if len_args > 1 {
-			year = args[0]
+		if lenArgs > 1 {
 			legend = args[1] == "true"
 		}
 
-		printGrid(year, legend)
+		if err := printGrid(year, legend); err != nil {
+			log.Fatalf("Failed to print grid: %v", err)
+		}
 	},
 }
 
@@ -820,10 +990,20 @@ var editCmd = &cobra.Command{
 	Aliases: []string{"e"},
 	Short:   "Edit the records file",
 	Run: func(cmd *cobra.Command, args []string) {
-		edit_cmd := exec.Command(Editor, FileName)
-		edit_cmd.Stdin = os.Stdin
-		edit_cmd.Stdout = os.Stdout
-		err := edit_cmd.Run()
+		if config == nil {
+			fmt.Println("Error: config not initialized")
+			return
+		}
+
+		if config.Editor == "" {
+			fmt.Println("Error: TAKT_EDITOR environment variable not set")
+			return
+		}
+
+		editCmd := exec.Command(config.Editor, config.FileName)
+		editCmd.Stdin = os.Stdin
+		editCmd.Stdout = os.Stdout
+		err := editCmd.Run()
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -860,10 +1040,12 @@ var commitCmd = &cobra.Command{
 
 var versionCmd = &cobra.Command{
 	Use:   "version",
-	Short: "Print the version number of takt",
-	Long:  "Print the version number of takt and exit.",
+	Short: "Print version information",
+	Long:  "Print version information including Go version and build target.",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("Version:", Version)
+		fmt.Printf("takt version %s\n", Version)
+		fmt.Printf("Built with Go %s\n", runtime.Version())
+		fmt.Printf("Target: %s/%s\n", runtime.GOOS, runtime.GOARCH)
 	},
 }
 
@@ -888,5 +1070,11 @@ func Execute() {
 }
 
 func main() {
+	var err error
+	config, err = LoadConfig()
+	if err != nil {
+		log.Fatalf("Failed to load configuration: %v", err)
+	}
+
 	Execute()
 }
