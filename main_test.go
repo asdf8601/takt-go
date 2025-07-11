@@ -307,6 +307,16 @@ func TestConfig(t *testing.T) {
 }
 
 func TestFormatOvertime(t *testing.T) {
+	// Initialize config for testing
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig() failed: %v", err)
+	}
+	originalConfig := config
+	config = cfg
+	config.TargetHours = 8.0 // Use 8 hours as target for testing
+	defer func() { config = originalConfig }()
+
 	tests := []struct {
 		name       string
 		difference float64
@@ -317,18 +327,20 @@ func TestFormatOvertime(t *testing.T) {
 		{"negative_30min", -0.5, "-0h30m"},
 		{"positive_1hr", 1.0, "+1h00m"},
 		{"negative_1hr", -1.0, "-1h00m"},
-		{"positive_1hr_30min", 1.5, "+1h30m"},
-		{"negative_1hr_30min", -1.5, "-1h30m"},
-		{"positive_8hr", 8.0, "+8h00m"},
-		{"negative_8hr", -8.0, "-8h00m"},
-		{"positive_24hr", 24.0, "+24h00m"},
-		{"negative_24hr", -24.0, "-24h00m"},
-		{"positive_over_24hr", 25.5, "+1d01h30m"},
-		{"negative_over_24hr", -25.5, "-1d01h30m"},
-		{"positive_exact_48hr", 48.0, "+2d00h00m"},
-		{"negative_exact_48hr", -48.0, "-2d00h00m"},
-		{"positive_complex", 74.75, "+3d02h45m"},
-		{"negative_complex", -74.75, "-3d02h45m"},
+		{"positive_7hr_30min", 7.5, "+7h30m"},
+		{"negative_7hr_30min", -7.5, "-7h30m"},
+		{"positive_8hr", 8.0, "+1d"},               // 8 hours = 1 day
+		{"negative_8hr", -8.0, "-1d"},              // -8 hours = -1 day
+		{"positive_9hr", 9.0, "+1d1h"},             // 9 hours = 1 day + 1 hour
+		{"negative_9hr", -9.0, "-1d1h"},            // -9 hours = -1 day + 1 hour
+		{"positive_16hr", 16.0, "+2d"},             // 16 hours = 2 days
+		{"negative_16hr", -16.0, "-2d"},            // -16 hours = -2 days
+		{"positive_17hr_30min", 17.5, "+2d1h30m"},  // 17.5 hours = 2 days + 1.5 hours
+		{"negative_17hr_30min", -17.5, "-2d1h30m"}, // -17.5 hours = -2 days + 1.5 hours
+		{"positive_24hr", 24.0, "+3d"},             // 24 hours = 3 days (8h each)
+		{"negative_24hr", -24.0, "-3d"},            // -24 hours = -3 days
+		{"positive_25hr", 25.0, "+3d1h"},           // 25 hours = 3 days + 1 hour
+		{"negative_25hr", -25.0, "-3d1h"},          // -25 hours = -3 days + 1 hour
 	}
 
 	for _, tt := range tests {
@@ -341,7 +353,52 @@ func TestFormatOvertime(t *testing.T) {
 	}
 }
 
-func TestBalanceCalculation(t *testing.T) {
+func TestFormatOvertimeWithDifferentTargetHours(t *testing.T) {
+	// Initialize config for testing
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig() failed: %v", err)
+	}
+	originalConfig := config
+	config = cfg
+	defer func() { config = originalConfig }()
+
+	tests := []struct {
+		name        string
+		targetHours float64
+		difference  float64
+		expected    string
+	}{
+		// Tests with 7.5 hour target
+		{"7.5h_target_positive_7.5hr", 7.5, 7.5, "+1d"},
+		{"7.5h_target_positive_15hr", 7.5, 15.0, "+2d"},
+		{"7.5h_target_positive_16hr", 7.5, 16.0, "+2d1h"},
+		{"7.5h_target_positive_22.5hr", 7.5, 22.5, "+3d"},
+		{"7.5h_target_negative_7.5hr", 7.5, -7.5, "-1d"},
+		
+		// Tests with 6 hour target
+		{"6h_target_positive_6hr", 6.0, 6.0, "+1d"},
+		{"6h_target_positive_12hr", 6.0, 12.0, "+2d"},
+		{"6h_target_positive_13.5hr", 6.0, 13.5, "+2d1h30m"},
+		{"6h_target_negative_6hr", 6.0, -6.0, "-1d"},
+		
+		// Tests with 10 hour target
+		{"10h_target_positive_10hr", 10.0, 10.0, "+1d"},
+		{"10h_target_positive_20hr", 10.0, 20.0, "+2d"},
+		{"10h_target_positive_25hr", 10.0, 25.0, "+2d5h"},
+		{"10h_target_negative_10hr", 10.0, -10.0, "-1d"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config.TargetHours = tt.targetHours
+			result := formatOvertime(tt.difference)
+			if result != tt.expected {
+				t.Errorf("formatOvertime(%v) with target %v = %v, want %v", tt.difference, tt.targetHours, result, tt.expected)
+			}
+		})
+	}
+}
 	// Initialize config for testing
 	cfg, err := LoadConfig()
 	if err != nil {

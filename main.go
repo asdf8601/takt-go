@@ -21,8 +21,9 @@ import (
 )
 
 const (
-	Version     = "2025-01-09"
-	DefaultHead = 10
+	Version            = "2025-01-09"
+	DefaultHead        = 10
+	DefaultTargetHours = 8.0
 
 	// Grid constants
 	DaysPerYear = 365
@@ -388,6 +389,7 @@ func hoursToText(totalHours float64) string {
 }
 
 // formatOvertime formats the overtime/undertime difference with a sign.
+// formatOvertime formats the overtime/undertime difference using TARGET_HOUR as the day unit
 func formatOvertime(difference float64) string {
 	if difference == 0 {
 		return "00h00m"
@@ -403,7 +405,32 @@ func formatOvertime(difference float64) string {
 	// Use absolute value for formatting
 	absDiff := math.Abs(difference)
 
-	if absDiff <= 24 {
+	// Calculate days based on TARGET_HOUR
+	targetHour := config.TargetHours
+	if targetHour == 0 {
+		targetHour = DefaultTargetHours // fallback to default if config is not set
+	}
+
+	if absDiff >= targetHour {
+		days := int(absDiff / targetHour)
+		remainingHours := absDiff - (float64(days) * targetHour)
+		hours := int(remainingHours)
+		minutes := int(math.Round((remainingHours - float64(hours)) * 60))
+
+		// Handle case where minutes round to 60
+		if minutes >= 60 {
+			hours += minutes / 60
+			minutes = minutes % 60
+		}
+
+		if hours == 0 && minutes == 0 {
+			return fmt.Sprintf("%s%dd", sign, days)
+		} else if minutes == 0 {
+			return fmt.Sprintf("%s%dd%dh", sign, days, hours)
+		} else {
+			return fmt.Sprintf("%s%dd%dh%02dm", sign, days, hours, minutes)
+		}
+	} else {
 		hours := int(absDiff)
 		minutes := int(math.Round((absDiff - float64(hours)) * 60))
 
@@ -414,18 +441,6 @@ func formatOvertime(difference float64) string {
 		}
 
 		return fmt.Sprintf("%s%dh%02dm", sign, hours, minutes)
-	} else {
-		days := int(absDiff / 24)
-		hours := int(absDiff) % 24
-		minutes := int(math.Round((absDiff - float64(days*24+hours)) * 60))
-
-		// Handle case where minutes round to 60
-		if minutes >= 60 {
-			hours += minutes / 60
-			minutes = minutes % 60
-		}
-
-		return fmt.Sprintf("%s%dd%02dh%02dm", sign, days, hours, minutes)
 	}
 }
 
@@ -842,14 +857,67 @@ func writeRecords(fileName, newLine string) error {
 var rootCmd = &cobra.Command{
 	Use:   "takt [COMMAND] [ARGS]",
 	Short: "CLI Time Tracking Tool",
-	Long:  "This is a simple time tracking tool that allows you to check in and out.",
+	Long: `Takt is a simple time tracking tool that allows you to check in and out.
+
+CONFIGURATION:
+  Set these environment variables to customize behavior:
+  - TAKT_FILE: Path to CSV file (default: ~/takt.csv)
+  - TAKT_TARGET_HOURS: Target hours per day (default: 8.0)
+  - TAKT_EDITOR: Editor for 'takt edit' command
+
+EXAMPLES:
+  # Check in/out (toggles automatically)
+  takt check
+  takt check "Working on project X"
+
+  # View recent records
+  takt cat 5                    # Show last 5 records
+
+  # Daily summary with balance calculation
+  takt day 10                   # Show last 10 days
+  Output: Date         Total   Days  Avg     Balance
+          2025-01-09   8h30m   1     8h30m   +0h30m
+          2025-01-08   16h00m  1     16h00m  +1d
+
+  # Weekly/monthly summaries
+  takt week 4                   # Show last 4 weeks
+  takt month 6                  # Show last 6 months
+
+  # Visual grid for the year
+  takt grid 2025 true          # Show 2025 with legend
+
+BALANCE CALCULATION:
+  The Balance column shows overtime/undertime based on your TARGET_HOURS:
+  - +1d = 1 full working day of overtime
+  - +1d2h = 1 day + 2 hours overtime
+  - -0h30m = 30 minutes undertime
+  - With 8h target: 16h worked = +1d balance
+  - With 7.5h target: 16h worked = +1d1h balance
+
+OUTPUT FORMAT:
+  - Date: Date or period (2025-01-09, 2025-W02, 2025-01)
+  - Total: Total hours worked in period
+  - Days: Number of working days in period
+  - Avg: Average hours per working day
+  - Balance: Overtime/undertime vs target (±days/hours)`,
 }
 
 var checkCmd = &cobra.Command{
 	Aliases: []string{"c"},
 	Use:     "check [NOTE]",
-	Short:   "Check in or out",
-	Long:    "Check in or out. If NOTE is provided, it will be saved with the record.",
+	Short:   "Check in or out (toggles automatically)",
+	Long: `Check in or out. The command automatically toggles between 'in' and 'out' states.
+If you're currently checked out, it will check you in.
+If you're currently checked in, it will check you out.
+
+EXAMPLES:
+  takt check                    # Simple check in/out
+  takt check "Meeting prep"     # Check in/out with note
+  takt c "Lunch break"          # Using alias
+
+OUTPUT:
+  Check in at 2025-01-09T14:30:00Z
+  Check out at 2025-01-09T17:45:00Z`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if config == nil {
 			fmt.Println("Error: config not initialized")
@@ -870,8 +938,19 @@ var checkCmd = &cobra.Command{
 var catCmd = &cobra.Command{
 	Aliases: []string{"display"},
 	Use:     "cat [HEAD]",
-	Short:   "Show all records",
-	Long:    "Show all records. If HEAD is provided, show the first n records.",
+	Short:   "Show recent records",
+	Long: `Show recent time tracking records in chronological order.
+Default shows the last 10 records. Use HEAD to specify a different number.
+
+EXAMPLES:
+  takt cat                      # Show last 10 records
+  takt cat 20                   # Show last 20 records
+  takt display 5                # Using alias
+
+OUTPUT FORMAT:
+  timestamp                 kind  notes
+  2025-01-09T14:30:00Z     in    Meeting prep
+  2025-01-09T17:45:00Z     out   End of day`,
 	Run: func(cmd *cobra.Command, args []string) {
 		head := DefaultHead
 		var err error
@@ -892,8 +971,25 @@ var catCmd = &cobra.Command{
 var dayCmd = &cobra.Command{
 	Aliases: []string{"d"},
 	Use:     "day [HEAD]",
-	Short:   "Daily summary",
-	Long:    "Daily summary. If HEAD is provided, show the first n records.",
+	Short:   "Daily summary with balance calculation",
+	Long: `Show daily time tracking summary with balance calculation.
+Balance shows overtime/undertime based on your TARGET_HOURS setting.
+Default shows the last 10 days.
+
+EXAMPLES:
+  takt day                      # Show last 10 days
+  takt day 30                   # Show last 30 days
+  takt d 5                      # Using alias
+
+OUTPUT FORMAT:
+  Date         Total   Days  Avg     Balance
+  2025-01-09   8h30m   1     8h30m   +0h30m
+  2025-01-08   16h00m  1     16h00m  +1d
+  
+BALANCE EXPLANATION:
+  - +1d = 1 full working day of overtime (based on TARGET_HOURS)
+  - +0h30m = 30 minutes overtime
+  - -2h00m = 2 hours undertime`,
 	Run: func(cmd *cobra.Command, args []string) {
 		head := DefaultHead
 		var err error
@@ -910,8 +1006,20 @@ var dayCmd = &cobra.Command{
 var weekCmd = &cobra.Command{
 	Aliases: []string{"w"},
 	Use:     "week [HEAD]",
-	Short:   "Week to date summary",
-	Long:    "Week to date summary. If HEAD is provided, show the first n records.",
+	Short:   "Weekly summary with balance calculation",
+	Long: `Show weekly time tracking summary with balance calculation.
+Weeks are calculated using ISO week numbers (Monday to Sunday).
+Balance shows overtime/undertime based on TARGET_HOURS × working days.
+
+EXAMPLES:
+  takt week                     # Show last 10 weeks
+  takt week 4                   # Show last 4 weeks
+  takt w 12                     # Using alias
+
+OUTPUT FORMAT:
+  Date      Total     Days  Avg     Balance
+  2025-W02  40h15m    5     8h03m   +0h15m
+  2025-W01  37h30m    5     7h30m   -2h30m`,
 	Run: func(cmd *cobra.Command, args []string) {
 		head := DefaultHead
 		var err error
@@ -928,8 +1036,21 @@ var weekCmd = &cobra.Command{
 var monthCmd = &cobra.Command{
 	Aliases: []string{"m"},
 	Use:     "month [HEAD]",
-	Short:   "Month to date summary",
-	Long:    "Month to date summary. If HEAD is provided, show the first n records. Use -1 to show all months.",
+	Short:   "Monthly summary with balance calculation",
+	Long: `Show monthly time tracking summary with balance calculation.
+Balance shows overtime/undertime based on TARGET_HOURS × working days.
+Use -1 to show all months.
+
+EXAMPLES:
+  takt month                    # Show last 10 months
+  takt month 6                  # Show last 6 months
+  takt month -1                 # Show all months
+  takt m 3                      # Using alias
+
+OUTPUT FORMAT:
+  Date     Total     Days  Avg     Balance
+  2025-01  168h30m   21    8h02m   +0h30m
+  2024-12  159h45m   20    7h59m   -0h15m`,
 	Run: func(cmd *cobra.Command, args []string) {
 		head := DefaultHead
 		var err error
@@ -946,8 +1067,19 @@ var monthCmd = &cobra.Command{
 var yearCmd = &cobra.Command{
 	Aliases: []string{"y"},
 	Use:     "year [HEAD]",
-	Short:   "Year to date summary",
-	Long:    "Year to date summary. If HEAD is provided, show the first n records.",
+	Short:   "Yearly summary with balance calculation",
+	Long: `Show yearly time tracking summary with balance calculation.
+Balance shows overtime/undertime based on TARGET_HOURS × working days.
+
+EXAMPLES:
+  takt year                     # Show last 10 years
+  takt year 3                   # Show last 3 years
+  takt y 5                      # Using alias
+
+OUTPUT FORMAT:
+  Date  Total      Days  Avg     Balance
+  2025  2080h30m   260   8h00m   +0h30m
+  2024  2076h15m   259   8h01m   +4h15m`,
 	Run: func(cmd *cobra.Command, args []string) {
 		head := DefaultHead
 		var err error
@@ -962,8 +1094,29 @@ var yearCmd = &cobra.Command{
 }
 
 var gridCmd = &cobra.Command{
-	Short: "Print the grid of the records",
-	Use:   "grid [YEAR] [LEGEND true | false]",
+	Short: "Visual grid showing daily activity",
+	Use:   "grid [YEAR] [LEGEND]",
+	Long: `Display a visual grid showing daily activity for the specified year.
+Each day is represented by a symbol indicating hours worked.
+Default shows current year without legend.
+
+EXAMPLES:
+  takt grid                     # Show current year
+  takt grid 2024                # Show 2024
+  takt grid 2025 true           # Show 2025 with legend
+
+GRID SYMBOLS:
+  󰋣  = 0-1 hours (minimal work)
+   = 1-4 hours (light work)
+   = 4-8 hours (normal work)
+  󰈸 = 8-12 hours (heavy work)
+   = 12+ hours (very heavy work)
+
+OUTPUT FORMAT:
+      D  W  L  M  X  J  V  S  D
+      --------------------------
+      2025-01-01 01 󰋣       󰈸   
+      2025-01-06 02     󰈸 󰈸   󰋣`,
 	Run: func(cmd *cobra.Command, args []string) {
 		lenArgs := len(args)
 		legend := false
@@ -989,6 +1142,22 @@ var editCmd = &cobra.Command{
 	Use:     "edit",
 	Aliases: []string{"e"},
 	Short:   "Edit the records file",
+	Long: `Open the time tracking CSV file in your configured editor.
+Set TAKT_EDITOR environment variable to specify your preferred editor.
+
+EXAMPLES:
+  takt edit                     # Open in configured editor
+  takt e                        # Using alias
+
+SETUP:
+  export TAKT_EDITOR=vim        # Use vim
+  export TAKT_EDITOR=code       # Use VS Code
+  export TAKT_EDITOR=nano       # Use nano
+
+FILE FORMAT:
+  timestamp,kind,notes
+  2025-01-09T14:30:00Z,in,Meeting prep
+  2025-01-09T17:45:00Z,out,End of day`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if config == nil {
 			fmt.Println("Error: config not initialized")
