@@ -39,6 +39,13 @@ const (
 	MediumHours   = 4.0
 	HighHours     = 8.0
 	VeryHighHours = 12.0
+
+	// Grid symbols
+	SymbolMinimal   = "󰋣 " // 0-1 hours
+	SymbolLight     = "▪ " // 1-4 hours
+	SymbolNormal    = "▮ " // 4-8 hours
+	SymbolHeavy     = "󰈸 " // 8-12 hours
+	SymbolVeryHeavy = "󰯆 " // 12+ hours
 )
 
 // Config holds application configuration
@@ -146,15 +153,15 @@ func printGrid(year string, legend bool) error {
 		item := daysAgg[day]
 		hours := item.TotalHours
 		if hours < LowHours {
-			value = "󰋣 "
+			value = SymbolMinimal
 		} else if hours < MediumHours {
-			value = " "
+			value = SymbolLight
 		} else if hours < HighHours {
-			value = " "
+			value = SymbolNormal
 		} else if hours < VeryHighHours {
-			value = "󰈸 "
+			value = SymbolHeavy
 		} else {
-			value = " "
+			value = SymbolVeryHeavy
 		}
 
 		grid[week][0] = day
@@ -171,25 +178,117 @@ func printGrid(year string, legend bool) error {
 	return nil
 }
 
-// printGridOutput prints the formatted grid
+// printGridOutput prints the formatted grid with improved formatting
 func printGridOutput(grid [][GridColumns]string, lastIdx int, legend bool) {
 	pad := "    "
-	fmt.Printf("%s D  W  L  M  X  J  V  S  D\n", pad)
-	fmt.Printf("%s--------------------------\n", pad)
+
+	// ANSI color codes
+	const (
+		colorReset  = "\033[0m"
+		colorRed    = "\033[31m"
+		colorYellow = "\033[33m"
+		colorGreen  = "\033[32m"
+		colorBlue   = "\033[34m"
+		colorOrange = "\033[38;5;208m"
+		colorPurple = "\033[35m"
+		colorCyan   = "\033[36m"
+		colorGray   = "\033[37m"
+		colorBold   = "\033[1m"
+	)
+
+	// Print header with better formatting
+	fmt.Printf("%s%s%s%-10s W  M  T  W  T  F  S  S%s\n", pad, colorBold, colorBlue, "Date", colorReset)
+	fmt.Printf("%s%s══════════════════════════════════%s", pad, colorBlue, colorReset)
+
+	var stats struct {
+		totalDays     int
+		activeDays    int
+		totalHours    float64
+		lightDays     int
+		normalDays    int
+		heavyDays     int
+		veryHeavyDays int
+	}
+
+	var currentMonth string
+
 	for idx, week := range grid {
-		fmt.Printf("%s%s %s %s %s %s %s %s %s %s\n", pad, week[0], week[1], week[3], week[4], week[5], week[6], week[7], week[8], week[2])
+		if week[0] == "" {
+			continue
+		}
+
+		// Extract month from date for separators
+		if len(week[0]) >= 7 {
+			weekMonth := week[0][:7] // "2025-01"
+			if currentMonth != "" && currentMonth != weekMonth {
+				fmt.Printf("%s%s──────────────────────────────────%s\n", pad, colorBlue, colorReset)
+			}
+			currentMonth = weekMonth
+		}
+
+		// Color code the symbols and collect stats
+		coloredWeek := make([]string, len(week))
+		for i := 0; i < len(week); i++ {
+			coloredWeek[i] = week[i]
+		}
+
+		for i := 2; i < len(week); i++ {
+			symbol := week[i]
+			if symbol != "  " {
+				stats.totalDays++
+				if symbol != SymbolMinimal {
+					stats.activeDays++
+				}
+
+				switch symbol {
+				case SymbolMinimal:
+					coloredWeek[i] = colorGray + symbol + colorReset
+					stats.lightDays++
+				case SymbolLight:
+					coloredWeek[i] = colorYellow + symbol + colorReset
+					stats.normalDays++
+				case SymbolNormal:
+					coloredWeek[i] = colorGreen + symbol + colorReset
+					stats.normalDays++
+				case SymbolHeavy:
+					coloredWeek[i] = colorOrange + symbol + colorReset
+					stats.heavyDays++
+				case SymbolVeryHeavy:
+					coloredWeek[i] = colorRed + symbol + colorReset
+					stats.veryHeavyDays++
+				}
+			}
+		}
+		// Print the week with better alignment
+		fmt.Printf("%s%s%s%s %s %s %s %s %s %s %s %s\n",
+			pad, colorBold, coloredWeek[0], colorReset,
+			coloredWeek[1], coloredWeek[3], coloredWeek[4],
+			coloredWeek[5], coloredWeek[6], coloredWeek[7],
+			coloredWeek[8], coloredWeek[2])
+
 		if (lastIdx > 0) && (idx == lastIdx) {
 			break
 		}
 	}
+
+	// Print summary statistics
+	if stats.totalDays > 0 {
+		fmt.Printf("\n%s%s📊 Summary:%s\n", pad, colorBold, colorReset)
+		fmt.Printf("%s%s├─ Total tracked days: %d%s\n", pad, colorBlue, stats.totalDays, colorReset)
+		fmt.Printf("%s%s├─ Active work days: %d%s\n", pad, colorBlue, stats.activeDays, colorReset)
+		if stats.activeDays > 0 {
+			activePercent := float64(stats.activeDays) / float64(stats.totalDays) * 100
+			fmt.Printf("%s%s└─ Activity rate: %.1f%%%s\n", pad, colorBlue, activePercent, colorReset)
+		}
+	}
+
 	if legend {
-		fmt.Printf("\n")
-		fmt.Printf("%sLegend:\n", pad)
-		fmt.Printf("%s%s󰋣 0h00m - 1h00m\n", pad, pad)
-		fmt.Printf("%s%s 1h00m - 4h00m\n", pad, pad)
-		fmt.Printf("%s%s 4h00m - 8h00m\n", pad, pad)
-		fmt.Printf("%s%s󰈸 8h00m - 12h00m\n", pad, pad)
-		fmt.Printf("%s%s 12h00m or more\n", pad, pad)
+		fmt.Printf("\n%s%s🎨 Legend:%s\n", pad, colorBold, colorReset)
+		fmt.Printf("%s%s├─ %s%s%s 0h00m - 1h00m   (Minimal work)%s\n", pad, colorGray, colorGray, SymbolMinimal, colorReset, colorReset)
+		fmt.Printf("%s%s├─ %s%s%s 1h00m - 4h00m   (Light work)%s\n", pad, colorYellow, colorYellow, SymbolLight, colorReset, colorReset)
+		fmt.Printf("%s%s├─ %s%s%s 4h00m - 8h00m   (Normal work)%s\n", pad, colorGreen, colorGreen, SymbolNormal, colorReset, colorReset)
+		fmt.Printf("%s%s├─ %s%s%s 8h00m - 12h00m  (Heavy work)%s\n", pad, colorBlue, colorBlue, SymbolHeavy, colorReset, colorReset)
+		fmt.Printf("%s%s└─ %s%s%s 12h00m or more  (Very heavy work)%s\n", pad, colorPurple, colorPurple, SymbolVeryHeavy, colorReset, colorReset)
 	}
 }
 
@@ -985,7 +1084,7 @@ OUTPUT FORMAT:
   Date         Total   Days  Avg     Balance
   2025-01-09   8h30m   1     8h30m   +0h30m
   2025-01-08   16h00m  1     16h00m  +1d
-  
+
 BALANCE EXPLANATION:
   - +1d = 1 full working day of overtime (based on TARGET_HOURS)
   - +0h30m = 30 minutes overtime
@@ -1094,10 +1193,11 @@ OUTPUT FORMAT:
 }
 
 var gridCmd = &cobra.Command{
-	Short: "Visual grid showing daily activity",
+	Short: "Visual grid showing daily activity with colors",
 	Use:   "grid [YEAR] [LEGEND]",
 	Long: `Display a visual grid showing daily activity for the specified year.
-Each day is represented by a symbol indicating hours worked.
+Each day is represented by a colored symbol indicating hours worked.
+Features month separators, color coding, and activity statistics.
 Default shows current year without legend.
 
 EXAMPLES:
@@ -1106,17 +1206,29 @@ EXAMPLES:
   takt grid 2025 true           # Show 2025 with legend
 
 GRID SYMBOLS:
-  󰋣  = 0-1 hours (minimal work)
-   = 1-4 hours (light work)
-   = 4-8 hours (normal work)
-  󰈸 = 8-12 hours (heavy work)
-   = 12+ hours (very heavy work)
+  󰋣  = 0-1 hours (minimal work) - Gray
+  ▪  = 1-4 hours (light work) - Yellow
+  ▮  = 4-8 hours (normal work) - Green
+  󰈸 = 8-12 hours (heavy work) - Blue
+  █  = 12+ hours (very heavy work) - Purple
+
+FEATURES:
+  • Color-coded activity levels
+  • Month separators for better readability
+  • Activity statistics (total days, active days, activity rate)
+  • Improved legend with descriptions
+  • Better visual alignment and formatting
 
 OUTPUT FORMAT:
-      D  W  L  M  X  J  V  S  D
-      --------------------------
-      2025-01-01 01 󰋣       󰈸   
-      2025-01-06 02     󰈸 󰈸   󰋣`,
+      Date         W  L  M  X  J  V  S  D
+      ═══════════════════════════════════
+      2025-01-01 01 󰋣       󰈸
+      2025-01-06 02     󰈸 󰈸   󰋣
+      ───────────────────────────────
+      📊 Summary:
+      ├─ Total tracked days: 192
+      ├─ Active work days: 116
+      └─ Activity rate: 60.4%`,
 	Run: func(cmd *cobra.Command, args []string) {
 		lenArgs := len(args)
 		legend := false
