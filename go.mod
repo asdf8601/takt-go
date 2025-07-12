@@ -1,4 +1,4 @@
-module github.com/asdf8601/takt
+module github.com/asdf8601/takt-go
 
 go 1.22.4
 
