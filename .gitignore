@@ -4,3 +4,4 @@ bin
 
 # Backup files created by takt
 *.bak
+takt-go
