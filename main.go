@@ -1,6 +1,6 @@
 package main
 
-// Version update for testing simplified CI/CD workflow
+// Final test of simplified CI/CD workflow with path filters
 import (
 	"bufio"
 	"encoding/csv"
