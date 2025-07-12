@@ -19,7 +19,7 @@ strengths of the Go programming language.
 
 ## Demo
 
-[![asciicast](https://asciinema.org/a/mIaTDoTyqqDjJVcAuN0VUsKoZ.svg)](https://asciinema.org/a/mIaTDoTyqqDjJVcAuN0VUsKoZ)
+<script src="https://asciinema.org/a/mIaTDoTyqqDjJVcAuN0VUsKoZ.js" id="asciicast-mIaTDoTyqqDjJVcAuN0VUsKoZ" async="true"></script>
 
 ## Installation
 
