@@ -1,12 +1,9 @@
 name: Release
 
 on:
-  workflow_run:
-    workflows: ["Tag"]
-    types:
-      - completed
-    branches:
-      - main
+  push:
+    tags:
+      - 'v*'
 
 permissions:
   contents: write
@@ -15,36 +12,16 @@ permissions:
 jobs:
   goreleaser:
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - run: git fetch --force --tags
-      - name: Check if new tag was created
-        id: check_tag
-        run: |
-          # Get the commit SHA from the workflow run that triggered this
-          COMMIT_SHA="${{ github.event.workflow_run.head_sha }}"
-
-          # Check if there's a tag pointing to this commit
-          TAG_FOR_COMMIT=$(git tag --points-at $COMMIT_SHA | head -1)
-
-          if [ -n "$TAG_FOR_COMMIT" ]; then
-            echo "new_tag_created=true" >> $GITHUB_OUTPUT
-            echo "tag=$TAG_FOR_COMMIT" >> $GITHUB_OUTPUT
-            echo "New tag created: $TAG_FOR_COMMIT"
-          else
-            echo "new_tag_created=false" >> $GITHUB_OUTPUT
-            echo "No new tag created for this commit, skipping release"
-          fi
       - uses: actions/setup-go@v5
-        if: steps.check_tag.outputs.new_tag_created == 'true'
         with:
           go-version: '1.24.x'
           cache: true
       - uses: goreleaser/goreleaser-action@v6
-        if: steps.check_tag.outputs.new_tag_created == 'true'
         with:
           distribution: goreleaser
           version: latest
@@ -52,4 +29,3 @@ jobs:
           workdir: .
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GORELEASER_CURRENT_TAG: ${{ steps.check_tag.outputs.tag }}
