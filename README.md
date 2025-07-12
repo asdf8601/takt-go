@@ -19,9 +19,39 @@ strengths of the Go programming language.
 
 ## Installation
 
+### Option 1: Download from GitHub Releases (Recommended)
+
+Download the latest binary directly from GitHub releases:
+
+#### Linux (x86_64)
+```bash
+cd /tmp/
+curl -L -o takt-go https://github.com/asdf8601/takt-go/releases/latest/download/takt-go-linux-amd64
+chmod +x takt-go
+sudo mv takt-go /usr/local/bin/
+```
+
+#### macOS (Intel)
+```bash
+cd /tmp/
+curl -L -o takt-go https://github.com/asdf8601/takt-go/releases/latest/download/takt-go-darwin-amd64
+chmod +x takt-go
+sudo mv takt-go /usr/local/bin/
+```
+
+#### macOS (Apple Silicon)
+```bash
+cd /tmp/
+curl -L -o takt-go https://github.com/asdf8601/takt-go/releases/latest/download/takt-go-darwin-arm64
+chmod +x takt-go
+sudo mv takt-go /usr/local/bin/
+```
+
+### Option 2: Install with Go
+
 To install takt-go, make sure you have Go installed on your system, then run:
 
-```
+```bash
 go install github.com/asdf8601/takt-go@latest
 ```
 
