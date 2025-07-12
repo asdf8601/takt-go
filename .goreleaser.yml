@@ -20,18 +20,25 @@ builds:
 archives:
   - format: binary
     name_template: >-
-      {{ .ProjectName }}-
-      {{- .Os }}-
-      {{- if eq .Arch "amd64" }}amd64
-      {{- else if eq .Arch "386" }}i386
-      {{- else }}{{ .Arch }}{{ end }}
-      {{- if .Arm }}v{{ .Arm }}{{ end }}
+      {{ .ProjectName }}-{{ .Os }}-{{ .Arch }}{{ with .Arm }}v{{ . }}{{ end }}{{ with .Mips }}_{{ . }}{{ end }}{{ if not (eq .Amd64 "v1") }}{{ .Amd64 }}{{ end }}
 
 checksum:
   name_template: 'checksums.txt'
 
 snapshot:
   name_template: "{{ incpatch .Version }}-next"
+
+release:
+  github:
+    owner: asdf8601
+    name: takt-go
+  draft: false
+  prerelease: auto
+  mode: replace
+  header: |
+    ## Release {{ .Tag }}
+
+    Welcome to this new release!
 
 changelog:
   sort: asc
