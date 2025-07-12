@@ -7,6 +7,4 @@ bin
 takt-go
 
 # Demo files
-demos/
 *.cast
-demo*.sh
