@@ -1,4 +1,4 @@
-module github.com/mmngreco/takt
+module github.com/asdf8601/takt
 
 go 1.22.4
 
