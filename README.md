@@ -229,6 +229,27 @@ and manage your time with similar precision.
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
+### Development Workflow
+
+This project uses automated releases based on conventional commits:
+
+- **Push to main** → Tests run automatically
+- **Tests pass** → New version tag generated based on commit messages
+- **Tag created** → Release with binaries published automatically
+
+### Commit Message Format
+
+Use conventional commits for automatic versioning:
+
+```bash
+feat: add new feature          # minor version bump
+fix: fix bug                   # patch version bump
+feat!: breaking change         # major version bump
+fix!: breaking bug fix         # major version bump
+```
+
+Other supported prefixes: `docs:`, `test:`, `ci:`, `chore:`, `style:`, `refactor:`, `perf:`, `build:`
+
 ## TODO
 
 - [ ] Add demo
