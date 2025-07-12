@@ -20,7 +20,7 @@ Takt-go is a command-line tool for tracking time, inspired by the original Takt 
 To install takt-go, make sure you have Go installed on your system, then run:
 
 ```
-go install github.com/yourusername/takt-go@latest
+go install github.com/asdf8601/takt-go@latest
 ```
 
 Replace `yourusername` with the actual GitHub username or organization where this project is hosted.
