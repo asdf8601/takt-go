@@ -3,7 +3,9 @@
 > [!NOTE]
 > This is a Go implementation of [`takt`](https://github.com/asdf8601/takt), which was originally written in Python.
 
-Takt-go is a command-line tool for tracking time, inspired by the original Takt project. It aims to provide similar functionality while leveraging the strengths of the Go programming language.
+Takt-go is a command-line tool for tracking time, inspired by the original Takt
+project. It aims to provide similar functionality while leveraging the
+strengths of the Go programming language.
 
 ## Features
 
@@ -23,7 +25,6 @@ To install takt-go, make sure you have Go installed on your system, then run:
 go install github.com/asdf8601/takt-go@latest
 ```
 
-Replace `yourusername` with the actual GitHub username or organization where this project is hosted.
 
 ## Usage
 
@@ -183,18 +184,16 @@ TAKT_TARGET_HOURS=8 takt w 1
 # 50 hours worked in 5 days = 50 - (8 × 5) = 10h balance = +1d2h
 ```
 
-This format makes it easy to understand overtime in terms of **full working days**, making time management more intuitive.
+This format makes it easy to understand overtime in terms of **full working
+days**, making time management more intuitive.
 
-The grid view uses these symbols:
-- 󰋣 : 0h00m - 1h00m
--  : 1h00m - 4h00m
--  : 4h00m - 8h00m
-- 󰈸 : 8h00m - 12h00m
--  : 12h00m or more
 
 ## About the Name
 
-The name "Takt" is derived from the German word "Taktzeit," which means cycle time. It is a key principle in lean manufacturing, describing the pace of production that aligns with customer demand. This tool aims to help you track and manage your time with similar precision.
+The name "Takt" is derived from the German word "Taktzeit," which means cycle
+time. It is a key principle in lean manufacturing, describing the pace of
+production that aligns with customer demand. This tool aims to help you track
+and manage your time with similar precision.
 
 ## Contributing
 
@@ -210,9 +209,3 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 - [x] Support flexible target hours format
 - [x] Implement day-based balance calculation
 - [x] Add comprehensive integration tests
-
-## License
-
-(Add license information here)
-
-[takt]: https://github.com/asdf8601/takt
