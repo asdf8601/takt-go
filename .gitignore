@@ -5,3 +5,8 @@ bin
 # Backup files created by takt
 *.bak
 takt-go
+
+# Demo files
+demos/
+*.cast
+demo*.sh

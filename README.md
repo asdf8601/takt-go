@@ -17,6 +17,10 @@ strengths of the Go programming language.
 - **Comprehensive reporting** - Daily, weekly, monthly, and yearly summaries with balance calculations
 - **Smart balance display** - Shows overtime/undertime in days and hours for easy interpretation
 
+## Demo
+
+[![asciicast](https://asciinema.org/a/2W8cVbckKz2iFyB23L1AfYFLl.svg)](https://asciinema.org/a/2W8cVbckKz2iFyB23L1AfYFLl)
+
 ## Installation
 
 ### Option 1: Download from GitHub Releases (Recommended)
@@ -252,7 +256,7 @@ Other supported prefixes: `docs:`, `test:`, `ci:`, `chore:`, `style:`, `refactor
 
 ## TODO
 
-- [ ] Add demo
+- [x] Add demo
 - [ ] Implement plugin support
 - [ ] Add more detailed usage instructions
 - [x] Create tests
